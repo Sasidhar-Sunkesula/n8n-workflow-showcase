@@ -1,0 +1,4 @@
+# Local secrets — never commit
+n8n_api_key.txt
+gemini_api_key.txt
+n8n.log
