@@ -1,0 +1,940 @@
+[
+  {
+    "updatedAt": "2026-07-26T22:44:08.590Z",
+    "createdAt": "2026-07-24T20:32:06.340Z",
+    "id": "jmsqW0f0Dt1FNl1M",
+    "name": "01 · AI Email Triage & Approval-Safe Drafts",
+    "description": "Manual/demo-only email triage. Validates bounded inputs, records durable audit events, requests internal Slack approval, and creates drafts only; it never polls an inbox or sends customer email.",
+    "active": false,
+    "isArchived": false,
+    "nodes": [
+      {
+        "parameters": {},
+        "id": "a1000000-0000-4000-8000-000000000001",
+        "name": "Manual Trigger",
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          -240,
+          64
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Inbox fetch (Gmail: watch unread in INBOX). Sandboxed sample batch so the\n// workflow runs end-to-end without OAuth. Swap this node for a Gmail Trigger in prod.\nconst emails = [\n  {\n    messageId: 'msg_18f2a1',\n    from: 'rachel.kim@brightloop.io',\n    subject: 'How do I export my invoices to CSV?',\n    body: \"Hi team, I'm trying to pull all invoices from Q2 into a CSV for our accountant but I can't find an export button anywhere in the billing tab. Is this possible on the Starter plan? Thanks! Rachel\",\n    receivedAt: '2026-07-25T08:14:02Z'\n  },\n  {\n    messageId: 'msg_18f2a2',\n    from: 'dan.oconnor@ferrostructural.com',\n    subject: 'URGENT: charged twice this month',\n    body: 'This is the second time this has happened. My card was charged $199 on July 3rd AND July 5th for the same subscription. I want a refund immediately or I am cancelling and disputing with my bank. Extremely frustrated.',\n    receivedAt: '2026-07-25T08:22:47Z'\n  },\n  {\n    messageId: 'msg_18f2a3',\n    from: 'priya.nair@atlasgrid.dev',\n    subject: 'Please upgrade our workspace to Business tier',\n    body: \"Hello, we'd like to move our workspace (atlasgrid-prod) from Team to Business tier starting next billing cycle, and add 12 more seats. Can you send over the updated quote and provision the upgrade? Thanks, Priya (IT Admin)\",\n    receivedAt: '2026-07-25T08:31:10Z'\n  },\n  {\n    messageId: 'msg_18f2a4',\n    from: 'noreply@statuspage.brightloop.io',\n    subject: 'FYI: Scheduled maintenance window Sunday 02:00 UTC',\n    body: 'This is an automated notification. Our upstream data provider has scheduled maintenance on Sunday between 02:00 and 04:00 UTC. No action is required. Brief API slowdowns may occur.',\n    receivedAt: '2026-07-25T08:40:33Z'\n  },\n  {\n    messageId: 'msg_18f2a5',\n    from: 'winner-dept@lucky-prizes-now.biz',\n    subject: 'Congratulations!!! You have WON a $500 gift card',\n    body: 'Dear lucky user, you have been SELECTED to receive a $500 Amazon gift card. Click here within 24 hours to claim your prize: http://lucky-prizes-now.biz/claim?id=88123. Act fast!',\n    receivedAt: '2026-07-25T08:44:59Z'\n  }\n];\nreturn emails.map(e => ({ json: e })).slice(0, 5);"
+        },
+        "id": "a1000000-0000-4000-8000-000000000002",
+        "name": "Sample Inbox (Demo Data)",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -16,
+          64
+        ]
+      },
+      {
+        "parameters": {
+          "modelId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "models/gemma-4-31b-it"
+          },
+          "messages": {
+            "values": [
+              {
+                "content": "=You are an email triage assistant for a SaaS support team. Classify the email below into EXACTLY one intent category: Question, Request, Complaint, FYI, or Spam. Also assign a priority (high, medium, or low) and write a one-sentence summary.\n\nRespond with ONLY valid JSON — no markdown fences, no commentary — in exactly this shape:\n{\"classification\": \"<Question|Request|Complaint|FYI|Spam>\", \"priority\": \"<high|medium|low>\", \"summary\": \"<one sentence>\"}\n\nDefinitions: Question = customer asks how to do something or whether something is possible. Request = customer asks you to take an action (upgrade, refund, provision, change). Complaint = customer is upset about a problem. FYI = informational only, no action needed. Spam = unsolicited junk/scam.\n\nEMAIL\nFrom: {{ $json.from }}\nSubject: {{ $json.subject }}\nBody:\n{{ $json.body }}\n\nIMPORTANT: Do not think out loud. Do not explain. Your ENTIRE response must be that single line of JSON and nothing else."
+              }
+            ]
+          },
+          "builtInTools": {},
+          "options": {}
+        },
+        "id": "a1000000-0000-4000-8000-000000000003",
+        "name": "Gemini: Classify Intent",
+        "type": "@n8n/n8n-nodes-langchain.googleGemini",
+        "typeVersion": 1.2,
+        "position": [
+          312,
+          64
+        ],
+        "credentials": {
+          "googlePalmApi": {
+            "id": "B8oepyrWrBGFl6Ud",
+            "name": "Google Gemini (portfolio)"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 3000
+      },
+      {
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "// Parse the model's verdict (handles raw JSON, fenced JSON, or reasoning text)\nconst raw = $json.content?.parts?.[0]?.text ?? '';\nconst cleaned = raw.replace(/```json/gi, '```').replace(/```/g, '').trim();\nconst allowed = ['Question', 'Request', 'Complaint', 'FYI', 'Spam'];\nlet verdict = null;\n// 1) Try every {...} candidate, last one wins (models often restate the schema first)\nconst candidates = cleaned.match(/\\{[^{}]*\\}/g) ?? [];\nfor (const c of candidates.reverse()) {\n  try {\n    const p = JSON.parse(c);\n    if (p && allowed.includes(p.classification)) { verdict = p; break; }\n  } catch (e) { /* keep looking */ }\n}\n// 2) Fallback: scrape labeled lines from reasoning-style output (take LAST occurrence)\nif (!verdict) {\n  const grabAll = (re) => { let m, last = null; while ((m = re.exec(cleaned)) !== null) last = m[1]; return last; };\n  const cls = grabAll(/classification[\\s\\\"':*]*\\s*(Question|Request|Complaint|FYI|Spam)/gi);\n  const pri = grabAll(/priority[\\s\\\"':*]*\\s*(high|medium|low)/gi);\n  const sum = grabAll(/summary[\\s\\\"':*]*\\s*([^\\n\\\"]{10,300})/gi);\n  verdict = { classification: cls, priority: (pri ?? 'medium').toLowerCase(), summary: (sum ?? '').trim() };\n}\nif (!allowed.includes(verdict.classification)) verdict.classification = 'FYI';\nconst email = $('Sample Inbox (Demo Data)').item.json;\n// --- Confidence score (mock heuristic for demo) ---\n// PRODUCTION: get this from the model's logprob or a calibration layer.\n// Here we simulate: if classification was parsed from clean JSON = high confidence,\n// if it fell through to the regex fallback = lower confidence.\nconst highConfidence = verdict.classification !== 'FYI' || cleaned.includes(verdict.classification);\nconst fallbackUsed = !candidates.some(c => { try { JSON.parse(c); return true; } catch { return false; } });\nconst confidence = fallbackUsed ? 0.55 : 0.92;\nreturn {\n  json: {\n    messageId: email.messageId,\n    from: email.from,\n    subject: email.subject,\n    body: email.body,\n    receivedAt: email.receivedAt,\n    classification: verdict.classification,\n    priority: verdict.priority ?? 'medium',\n    summary: verdict.summary ?? '',\n    confidence: confidence\n  }\n};"
+        },
+        "id": "a1000000-0000-4000-8000-000000000004",
+        "name": "Parse Classification",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          552,
+          64
+        ]
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ ['Question','Request','Complaint'].includes($json.classification) }}",
+                      "rightValue": "",
+                      "operator": {
+                        "type": "boolean",
+                        "operation": "true",
+                        "singleValue": true
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "Actionable"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ ['FYI','Spam'].includes($json.classification) }}",
+                      "rightValue": "",
+                      "operator": {
+                        "type": "boolean",
+                        "operation": "true",
+                        "singleValue": true
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "Log Only"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "a1000000-0000-4000-8000-000000000005",
+        "name": "Route by Intent",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.2,
+        "position": [
+          996,
+          64
+        ]
+      },
+      {
+        "parameters": {
+          "modelId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "models/gemma-4-31b-it"
+          },
+          "messages": {
+            "values": [
+              {
+                "content": "=You are a senior customer support agent at BrightLoop (a SaaS billing analytics product). Write a complete, warm, professional reply email (under 160 words) to the customer email below. Match the tone to the intent: apologize and de-escalate for complaints, answer clearly for questions, confirm next steps for requests. Sign as \"Alex — BrightLoop Support\". Wrap your final reply between the exact markers <<<REPLY>>> and <<<END>>>. Anything outside the markers is discarded, so the complete email MUST appear between them. Do not think out loud before the markers.\n\nINTENT: {{ $json.classification }} (priority: {{ $json.priority }})\nFROM: {{ $json.from }}\nSUBJECT: {{ $json.subject }}\nBODY:\n{{ $json.body }}\n\nIMPORTANT: Do not think out loud, do not plan, do not repeat these instructions. Start your response DIRECTLY with the greeting line (e.g. \"Hi Rachel,\") and output only the reply."
+              }
+            ]
+          },
+          "builtInTools": {},
+          "options": {}
+        },
+        "id": "a1000000-0000-4000-8000-000000000006",
+        "name": "Gemini: Draft Reply",
+        "type": "@n8n/n8n-nodes-langchain.googleGemini",
+        "typeVersion": 1.2,
+        "position": [
+          1120,
+          -64
+        ],
+        "credentials": {
+          "googlePalmApi": {
+            "id": "B8oepyrWrBGFl6Ud",
+            "name": "Google Gemini (portfolio)"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 3000
+      },
+      {
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "// Extract the final reply text from Gemini's output\nconst item = $json;\nlet rawDraft = '';\nif (item.content && Array.isArray(item.content.parts)) {\n  rawDraft = item.content.parts.filter(p => !p.thought).map(p => p.text || '').join('');\n} else if (item.text) { rawDraft = item.text; }\nrawDraft = (rawDraft || '').trim();\nlet draft = '';\nconst lastIdx = rawDraft.lastIndexOf('<<<REPLY>>>');\nif (lastIdx !== -1) {\n  draft = rawDraft.slice(lastIdx + 11);\n  const endIdx = draft.indexOf('<<<END>>>');\n  if (endIdx !== -1) draft = draft.slice(0, endIdx);\n  draft = draft.trim();\n}\nif (draft.length < 40) {\n  const g = /(Hi|Hello|Dear|Hey)\\s+[A-Z][a-zA-Z]*,/g;\n  let m, last = -1;\n  while ((m = g.exec(rawDraft)) !== null) last = m.index;\n  if (last !== -1) {\n    draft = rawDraft.slice(last);\n    const s = draft.indexOf('<<<END>>>');\n    if (s !== -1) draft = draft.slice(0, s);\n    draft = draft.trim();\n  }\n}\nif (draft.length < 40) draft = rawDraft;\nconst email = $('Parse Classification').item.json;\nreturn { json: { ...email, draftReply: draft } };"
+        },
+        "id": "extract-reply-text",
+        "name": "Extract Reply Text",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1360,
+          -176
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "draft",
+          "subject": "=Re: {{ $json.subject }}",
+          "message": "={{ $json.draftReply }}",
+          "options": {
+            "sendTo": "={{ $json.from }}"
+          }
+        },
+        "id": "gmail-save-reply-draft",
+        "name": "Gmail: Save Reply Draft",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.1,
+        "position": [
+          2048,
+          -176
+        ],
+        "webhookId": "052e298a-3d38-4ced-a146-fb47caff6236",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "6cOkI9yXp7fgLHw4",
+            "name": "Gmail account"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 3000
+      },
+      {
+        "parameters": {
+          "authentication": "oAuth2",
+          "select": "channel",
+          "channelId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "C0BKVT980BE"
+          },
+          "text": "=:rotating_light: *{{ $('Parse Classification').item.json.classification }}* (priority: {{ $('Parse Classification').item.json.priority }}) — {{ $('Parse Classification').item.json.subject }}\n*From:* {{ $('Parse Classification').item.json.from }}\n*Summary:* {{ $('Parse Classification').item.json.summary }}\n:memo: Gemini reply draft saved to Gmail — review & send.",
+          "otherOptions": {}
+        },
+        "id": "slack-alert-support-triage",
+        "name": "Slack: Alert #support-triage",
+        "type": "n8n-nodes-base.slack",
+        "typeVersion": 2.2,
+        "position": [
+          2288,
+          -176
+        ],
+        "webhookId": "40471383-a937-4c14-8ba7-1d34a5598549",
+        "credentials": {
+          "slackOAuth2Api": {
+            "id": "0LO7Ag4PE1NaZFpO",
+            "name": "Slack account"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 3000
+      },
+      {
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const e=$('Extract Reply Text').item.json;return{json:{Timestamp:new Date().toISOString(),EventKey:e.EventKey,Workflow:'email-triage',Status:'draft_created_after_approval',MessageId:e.messageId,Classification:e.classification,Priority:e.priority,ReplayPolicy:'do_not_replay_after_draft'}};"
+        },
+        "id": "prep-row-actionable",
+        "name": "Prepare Row (Actionable)",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2528,
+          -176
+        ]
+      },
+      {
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const e=$json;return{json:{Timestamp:new Date().toISOString(),EventKey:e.EventKey,Workflow:'email-triage',Status:'logged_no_draft',MessageId:e.messageId,Classification:e.classification,Priority:e.priority,ReplayPolicy:'safe_to_replay'}};"
+        },
+        "id": "prep-row-logonly",
+        "name": "Prepare Row (Log Only)",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1360,
+          224
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+          },
+          "sheetName": {
+            "__rl": true,
+            "mode": "name",
+            "value": "Triage Audit"
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "matchingColumns": [],
+            "schema": [],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "sheets-append-triage-log",
+        "name": "Sheets: Append Triage Log",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.5,
+        "position": [
+          2768,
+          64
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "S9D1QAfTwCydvWmk",
+            "name": "Google Sheets account"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 3000
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.confidence }}",
+                "rightValue": "0.7",
+                "operator": {
+                  "type": "number",
+                  "operation": "gt",
+                  "singleValue": false
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "name": "Confident?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          776,
+          64
+        ],
+        "id": "53aa69e1-5eed-4955-81cc-5c9c93021740"
+      },
+      {
+        "name": "Validate Email Input",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const e=$input.first().json;const ok=['messageId','from','subject','body'].every(k=>String(e[k]||'').trim())&&/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(String(e.from))&&String(e.subject).length<=240&&String(e.body).length<=12000;if(!ok)return{json:{Timestamp:new Date().toISOString(),EventKey:'email:'+String(e.messageId||'invalid'),Workflow:'email-triage',Status:'rejected_invalid_input'}};return{json:{...e,body:String(e.body).slice(0,12000),EventKey:'email:'+e.messageId,input_valid:true}};"
+        },
+        "id": "validate-email",
+        "position": [
+          120,
+          64
+        ]
+      },
+      {
+        "name": "Email Input Valid?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.input_valid === true }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "valid-email",
+        "position": [
+          320,
+          64
+        ]
+      },
+      {
+        "name": "Prepare Triage Claim",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const e=$input.first().json;return{json:{...e,Timestamp:new Date().toISOString(),Workflow:'email-triage',Status:'claimed',ReplayPolicy:'do_not_replay_after_draft'}};"
+        },
+        "id": "claim-email",
+        "position": [
+          520,
+          64
+        ]
+      },
+      {
+        "name": "Sheets: Append Triage State",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.5,
+        "parameters": {
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+          },
+          "sheetName": {
+            "__rl": true,
+            "mode": "name",
+            "value": "Triage State"
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "matchingColumns": [],
+            "schema": [],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {
+            "handlingExtraData": "ignoreIt"
+          }
+        },
+        "id": "h-SheetsAppendTriageState",
+        "position": [
+          740,
+          64
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "S9D1QAfTwCydvWmk",
+            "name": "Google Sheets account"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 3000
+      },
+      {
+        "name": "Sheets: Append Invalid Triage",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.5,
+        "parameters": {
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+          },
+          "sheetName": {
+            "__rl": true,
+            "mode": "name",
+            "value": "Triage Audit"
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "matchingColumns": [],
+            "schema": [],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {
+            "handlingExtraData": "ignoreIt"
+          }
+        },
+        "id": "h-SheetsAppendInvalidTriage",
+        "position": [
+          520,
+          320
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "S9D1QAfTwCydvWmk",
+            "name": "Google Sheets account"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 3000
+      },
+      {
+        "name": "Slack: Request Draft Approval",
+        "type": "n8n-nodes-base.slack",
+        "typeVersion": 2.2,
+        "parameters": {
+          "authentication": "oAuth2",
+          "resource": "message",
+          "operation": "sendAndWait",
+          "select": "channel",
+          "channelId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "C0BKVT980BE"
+          },
+          "message": "=Review draft only; no email will be sent.\nFrom: {{ $json.from }}\nSubject: {{ $json.subject }}\n\n{{ $json.draftReply }}",
+          "responseType": "approval",
+          "approvalOptions": {
+            "values": {
+              "approvalType": "double",
+              "approveLabel": "Create draft",
+              "disapproveLabel": "Reject"
+            }
+          },
+          "options": {
+            "limitWaitTime": {
+              "values": {
+                "limitType": "afterTimeInterval",
+                "resumeAmount": 4,
+                "resumeUnit": "hours"
+              }
+            },
+            "appendAttribution": false
+          }
+        },
+        "id": "approval",
+        "position": [
+          1580,
+          -64
+        ],
+        "credentials": {
+          "slackOAuth2Api": {
+            "id": "0LO7Ag4PE1NaZFpO",
+            "name": "Slack account"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 3000
+      },
+      {
+        "name": "Approval Outcome",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const r=$input.first().json;const approved=r.approved===true||r.response==='approved'||r.action==='approve';return{json:{...$('Extract Reply Text').item.json,approval_status:approved?'approved':(r.approved===false?'rejected':'expired'),ApprovedBy:String(r.respondedBy||r.user||'internal-reviewer'),Timestamp:new Date().toISOString()}};"
+        },
+        "id": "approval-outcome",
+        "position": [
+          1800,
+          -64
+        ]
+      },
+      {
+        "name": "Approved for Draft?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.approval_status === \"approved\" }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "approved-draft",
+        "position": [
+          2000,
+          -64
+        ]
+      },
+      {
+        "name": "Sheets: Append Triage Review Audit",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.5,
+        "parameters": {
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+          },
+          "sheetName": {
+            "__rl": true,
+            "mode": "name",
+            "value": "Triage Audit"
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "matchingColumns": [],
+            "schema": [],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {
+            "handlingExtraData": "ignoreIt"
+          }
+        },
+        "id": "h-SheetsAppendTriageReviewAudit",
+        "position": [
+          2280,
+          224
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "S9D1QAfTwCydvWmk",
+            "name": "Google Sheets account"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 3000
+      }
+    ],
+    "connections": {
+      "Manual Trigger": {
+        "main": [
+          [
+            {
+              "node": "Sample Inbox (Demo Data)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Sample Inbox (Demo Data)": {
+        "main": [
+          [
+            {
+              "node": "Validate Email Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Validate Email Input": {
+        "main": [
+          [
+            {
+              "node": "Email Input Valid?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Email Input Valid?": {
+        "main": [
+          [
+            {
+              "node": "Prepare Triage Claim",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Sheets: Append Invalid Triage",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Triage Claim": {
+        "main": [
+          [
+            {
+              "node": "Sheets: Append Triage State",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Sheets: Append Triage State": {
+        "main": [
+          [
+            {
+              "node": "Gemini: Classify Intent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gemini: Classify Intent": {
+        "main": [
+          [
+            {
+              "node": "Parse Classification",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse Classification": {
+        "main": [
+          [
+            {
+              "node": "Confident?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Confident?": {
+        "main": [
+          [
+            {
+              "node": "Route by Intent",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Sheets: Append Triage Review Audit",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Route by Intent": {
+        "main": [
+          [
+            {
+              "node": "Gemini: Draft Reply",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Prepare Row (Log Only)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gemini: Draft Reply": {
+        "main": [
+          [
+            {
+              "node": "Extract Reply Text",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Extract Reply Text": {
+        "main": [
+          [
+            {
+              "node": "Slack: Request Draft Approval",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Slack: Request Draft Approval": {
+        "main": [
+          [
+            {
+              "node": "Approval Outcome",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Approval Outcome": {
+        "main": [
+          [
+            {
+              "node": "Approved for Draft?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Approved for Draft?": {
+        "main": [
+          [
+            {
+              "node": "Gmail: Save Reply Draft",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Sheets: Append Triage Review Audit",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gmail: Save Reply Draft": {
+        "main": [
+          [
+            {
+              "node": "Slack: Alert #support-triage",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Slack: Alert #support-triage": {
+        "main": [
+          [
+            {
+              "node": "Prepare Row (Actionable)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Row (Actionable)": {
+        "main": [
+          [
+            {
+              "node": "Sheets: Append Triage Log",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Row (Log Only)": {
+        "main": [
+          [
+            {
+              "node": "Sheets: Append Triage Log",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Sheets: Append Triage Log": {
+        "main": [
+          []
+        ]
+      },
+      "Sheets: Append Invalid Triage": {
+        "main": [
+          []
+        ]
+      },
+      "Sheets: Append Triage Review Audit": {
+        "main": [
+          []
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1",
+      "binaryMode": "separate",
+      "errorWorkflow": "NtLq76OQQF3mYyh3",
+      "saveExecutionProgress": false,
+      "saveManualExecutions": false,
+      "saveExecutionDataSuccess": "none",
+      "saveExecutionDataError": "all"
+    },
+    "staticData": null,
+    "meta": null,
+    "nodeGroups": [],
+    "pinData": {},
+    "versionId": "29e350dd-1a71-4f73-8d91-9761b638b58a",
+    "activeVersionId": null,
+    "versionCounter": 12,
+    "triggerCount": 0,
+    "sourceWorkflowId": null,
+    "tags": [],
+    "shared": [
+      {
+        "updatedAt": "2026-07-24T20:32:06.344Z",
+        "createdAt": "2026-07-24T20:32:06.344Z",
+        "role": "workflow:owner",
+        "workflowId": "jmsqW0f0Dt1FNl1M",
+        "projectId": "Z8OBeEQoCVNlQZCj",
+        "project": {
+          "updatedAt": "2026-07-24T20:12:21.986Z",
+          "createdAt": "2026-07-24T20:11:25.841Z",
+          "id": "Z8OBeEQoCVNlQZCj",
+          "name": "Sasidhar Sunkesula <www.sasidharsunkesula579@gmail.com>",
+          "type": "personal",
+          "icon": null,
+          "description": null,
+          "customTelemetryTags": [],
+          "creatorId": "66c1d84e-4705-4037-8030-0906fa2af457"
+        }
+      }
+    ],
+    "versionMetadata": {
+      "name": null,
+      "description": null
+    }
+  }
+]

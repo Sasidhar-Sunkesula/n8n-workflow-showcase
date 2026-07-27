@@ -1,0 +1,226 @@
+[
+  {
+    "updatedAt": "2026-07-26T22:13:04.837Z",
+    "createdAt": "2026-07-26T22:13:04.837Z",
+    "id": "NtLq76OQQF3mYyh3",
+    "name": "00 · [PROD] Shared Error Handler & Alerting",
+    "description": "Internal reliability handler: redacts failure data, appends a durable DLQ event, and posts a connected Slack alert. Gmail fallback is an internal draft only and disabled until an on-call recipient is configured.",
+    "active": false,
+    "isArchived": false,
+    "nodes": [
+      {
+        "parameters": {},
+        "id": "error-trigger",
+        "name": "Error Trigger",
+        "type": "n8n-nodes-base.errorTrigger",
+        "typeVersion": 1,
+        "position": [
+          220,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const e=$input.first().json,ex=e.execution||{},wf=e.workflow||{};const raw=String(e.message||ex.error?.message||'Unknown error');const category=/401|403|credential|token|authori[sz]/i.test(raw)?'AUTH':/429|timeout|ECONNRESET|5\\d\\d/i.test(raw)?'TRANSIENT':/validation|invalid|required|schema/i.test(raw)?'VALIDATION':'PROCESSING';const red=s=>s.replace(/AIza[\\w-]+|AQ\\.[\\w.-]+|Bearer\\s+[^\\s]+|https?:\\/\\/[^\\s]+/gi,'[redacted]').replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi,'[redacted-email]');const node=ex.lastNodeExecuted||e.lastNodeExecuted||'unknown',key=[wf.id||'unknown',ex.id||'unknown',node].join(':');return[{json:{EventKey:key,Timestamp:new Date().toISOString(),Severity:['AUTH','PROCESSING'].includes(category)?'CRITICAL':'WARNING',Category:category,Workflow:String(wf.name||'unknown').slice(0,160),FailedNode:String(node).slice(0,160),ExecutionId:String(ex.id||''),ErrorSummary:red(raw).slice(0,500),Status:'open',ReplayPolicy:category==='TRANSIENT'?'retry_from_checkpoint':'manual_review_required',AlertText:'['+category+'] '+String(wf.name||'workflow')+' failed at '+node+'; event '+key}}];"
+        },
+        "id": "parse-error",
+        "name": "Parse & Classify Error",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          440,
+          300
+        ]
+      },
+      {
+        "name": "Sheets: Append Error DLQ",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.5,
+        "parameters": {
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+          },
+          "sheetName": {
+            "__rl": true,
+            "mode": "name",
+            "value": "Error DLQ"
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "matchingColumns": [],
+            "schema": [],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {
+            "handlingExtraData": "ignoreIt"
+          }
+        },
+        "id": "h-SheetsAppendErrorDLQ",
+        "position": [
+          680,
+          300
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "S9D1QAfTwCydvWmk",
+            "name": "Google Sheets account"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 3000
+      },
+      {
+        "name": "Slack: Alert Automation Errors",
+        "type": "n8n-nodes-base.slack",
+        "typeVersion": 2.2,
+        "parameters": {
+          "authentication": "oAuth2",
+          "resource": "message",
+          "operation": "post",
+          "select": "channel",
+          "channelId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "C0BKVT980BE"
+          },
+          "messageType": "text",
+          "text": "={{ $json.AlertText }}",
+          "otherOptions": {
+            "includeLinkToWorkflow": false
+          }
+        },
+        "id": "slack-alert",
+        "position": [
+          920,
+          300
+        ],
+        "credentials": {
+          "slackOAuth2Api": {
+            "id": "0LO7Ag4PE1NaZFpO",
+            "name": "Slack account"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 3000
+      },
+      {
+        "name": "Gmail: Create Internal Alert Draft",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.1,
+        "parameters": {
+          "resource": "draft",
+          "operation": "create",
+          "subject": "=[n8n] Slack alert delivery failed",
+          "emailType": "text",
+          "message": "=Internal alert draft only.\n\n{{ $('Parse & Classify Error').item.json.AlertText }}",
+          "options": {
+            "sendTo": "={{ $env.N8N_ONCALL_EMAIL || \"oncall@example.invalid\" }}"
+          }
+        },
+        "id": "gmail-fallback",
+        "position": [
+          1160,
+          420
+        ],
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "6cOkI9yXp7fgLHw4",
+            "name": "Gmail account"
+          }
+        },
+        "disabled": true,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 3000
+      }
+    ],
+    "connections": {
+      "Error Trigger": {
+        "main": [
+          [
+            {
+              "node": "Parse & Classify Error",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse & Classify Error": {
+        "main": [
+          [
+            {
+              "node": "Sheets: Append Error DLQ",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Sheets: Append Error DLQ": {
+        "main": [
+          [
+            {
+              "node": "Slack: Alert Automation Errors",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Slack: Alert Automation Errors": {
+        "main": [
+          []
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1",
+      "errorWorkflow": "NtLq76OQQF3mYyh3",
+      "saveExecutionProgress": false,
+      "saveManualExecutions": false,
+      "saveExecutionDataSuccess": "none",
+      "saveExecutionDataError": "all"
+    },
+    "staticData": null,
+    "meta": null,
+    "nodeGroups": [],
+    "pinData": null,
+    "versionId": "fa1f4bea-db42-4f22-b6f3-3e2efa78c15d",
+    "activeVersionId": null,
+    "versionCounter": 2,
+    "triggerCount": 0,
+    "sourceWorkflowId": null,
+    "tags": [],
+    "shared": [
+      {
+        "updatedAt": "2026-07-26T22:13:04.839Z",
+        "createdAt": "2026-07-26T22:13:04.839Z",
+        "role": "workflow:owner",
+        "workflowId": "NtLq76OQQF3mYyh3",
+        "projectId": "Z8OBeEQoCVNlQZCj",
+        "project": {
+          "updatedAt": "2026-07-24T20:12:21.986Z",
+          "createdAt": "2026-07-24T20:11:25.841Z",
+          "id": "Z8OBeEQoCVNlQZCj",
+          "name": "Sasidhar Sunkesula <www.sasidharsunkesula579@gmail.com>",
+          "type": "personal",
+          "icon": null,
+          "description": null,
+          "customTelemetryTags": [],
+          "creatorId": "66c1d84e-4705-4037-8030-0906fa2af457"
+        }
+      }
+    ],
+    "versionMetadata": {
+      "name": null,
+      "description": null
+    }
+  }
+]

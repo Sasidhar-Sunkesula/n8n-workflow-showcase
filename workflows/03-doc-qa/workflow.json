@@ -1,0 +1,438 @@
+[
+  {
+    "updatedAt": "2026-07-26T23:05:22.368Z",
+    "createdAt": "2026-07-26T21:57:17.816Z",
+    "id": "FZ6uqJEpsatUC2by",
+    "name": "03 · Document Q&A Search Bot (Knowledge)",
+    "description": "Credential-backed Q&A demo. Authenticated questions are bounded, retrieved deterministically from the local demo corpus, threshold-gated, answered through the existing n8n Gemini credential, and logged with a hashed question key.",
+    "active": false,
+    "isArchived": false,
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "doc-qa",
+          "authentication": "headerAuth",
+          "responseMode": "responseNode",
+          "options": {
+            "ignoreBots": true
+          }
+        },
+        "id": "webhook",
+        "name": "Ask Question (Webhook)",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          200,
+          360
+        ],
+        "webhookId": "doc-qa-search-bot",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "PZk2a1HGek3kRQ7M",
+            "name": "Portfolio Intake Header Auth"
+          }
+        }
+      },
+      {
+        "parameters": {},
+        "id": "manual",
+        "name": "Manual Trigger (demo)",
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          200,
+          120
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Knowledge base: product FAQ chunks (the \"documents\" to search over)\nreturn [\n  { json: { text: \"Our business hours are Monday to Friday, 9 AM to 6 PM Eastern Time. We are closed on weekends and major public holidays. Urgent issues on paid enterprise plans get 24/7 support.\", metadata: { category: \"hours\", id: 1 } } },\n  { json: { text: \"To reset your password, click 'Forgot Password' on the login page and follow the email link. The reset link expires after 30 minutes. If you don't get the email, check your spam folder or contact support@acme.com.\", metadata: { category: \"account\", id: 2 } } },\n  { json: { text: \"We offer three plans: Starter ($19/mo, 1 user), Pro ($49/mo, up to 10 users), and Enterprise (custom pricing, unlimited users plus SSO). Annual billing gives 2 months free.\", metadata: { category: \"pricing\", id: 3 } } },\n  { json: { text: \"Our refund policy allows a full refund within 14 days of purchase for annual plans. Monthly plans are non-refundable but you can cancel anytime to stop future charges.\", metadata: { category: \"billing\", id: 4 } } },\n  { json: { text: \"You can export your data anytime from Settings > Data > Export. We support CSV and JSON formats. Enterprise plans also get scheduled exports to S3 or BigQuery.\", metadata: { category: \"data\", id: 5 } } }\n];"
+        },
+        "id": "faq",
+        "name": "FAQ Chunks",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          460,
+          220
+        ]
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "question",
+                "name": "question",
+                "type": "string",
+                "value": "={{ $('Validate Question').item.json.question }}"
+              }
+            ]
+          },
+          "options": {},
+          "executeOnce": true
+        },
+        "id": "setq",
+        "name": "Set Question",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          720,
+          220
+        ],
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "modelId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "models/gemma-4-31b-it"
+          },
+          "messages": {
+            "values": [
+              {
+                "content": "=Answer using only this context. If unavailable, reply exactly: \"I'm sorry, I don't have that information.\"\n\nCONTEXT:\n{{ $json.text }}\n\nQUESTION:\n{{ $('Set Question').item.json.question }}",
+                "role": "user"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "gemini",
+        "name": "Gemini (gemma-4-31b-it)",
+        "type": "@n8n/n8n-nodes-langchain.googleGemini",
+        "typeVersion": 1,
+        "position": [
+          1760,
+          120
+        ],
+        "credentials": {
+          "googlePalmApi": {
+            "id": "B8oepyrWrBGFl6Ud",
+            "name": "Google Gemini (portfolio)"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 3000
+      },
+      {
+        "parameters": {
+          "jsCode": "const x=$input.first().json,raw=x.text||x.content?.parts?.filter(p=>!p.thought).map(p=>p.text||'').join('')||'',r=$('Retrieve Best Chunk').item.json;return{json:{Timestamp:new Date().toISOString(),QuestionKey:$('Validate Question').item.json.QuestionKey,Answer:String(raw).trim().slice(0,1000),Confident:true,Source:String(r.metadata?.category||'faq'),MatchScore:r.matchScore,Status:'answered'}};"
+        },
+        "id": "format",
+        "name": "Format Answer",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2020,
+          220
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+          },
+          "sheetName": {
+            "__rl": true,
+            "mode": "name",
+            "value": "DocQA Audit"
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "matchingColumns": [],
+            "schema": [],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "sheets",
+        "name": "Sheets: Log Q&A",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.5,
+        "position": [
+          2540,
+          220
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "S9D1QAfTwCydvWmk",
+            "name": "Google Sheets account"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 3000
+      },
+      {
+        "parameters": {
+          "respondWith": "firstEntryJson"
+        },
+        "id": "respond",
+        "name": "Respond to Webhook",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [
+          2800,
+          220
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "name": "Validate Question",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const b=$json.body||$json,q=String(b.question||'').trim().replace(/\\s+/g,' ');if(q.length<5||q.length>500)throw Error('Invalid question length');return{json:{question:q,QuestionKey:require('crypto').createHash('sha256').update(q).digest('hex')}};"
+        },
+        "id": "validate-question",
+        "position": [
+          440,
+          360
+        ]
+      },
+      {
+        "name": "Retrieve Best Chunk",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "const q=$('Set Question').item.json.question.toLowerCase(),stop=new Set(['the','a','an','is','are','do','does','how','what','when','where','i','my','to','of','in','on','for','can','you','we','it','and','or']),ts=q.replace(/[^a-z0-9\\s]/g,' ').split(/\\s+/).filter(t=>t&&!stop.has(t)),cs=$('FAQ Chunks').all().map(i=>i.json);let best=null,score=0;for(const c of cs){let s=0;for(const t of ts)if(String(c.text||'').toLowerCase().includes(t))s++;if(s>score){score=s;best=c}}return[{json:{text:best?.text||'',metadata:best?.metadata||{},matchScore:score,confident:score>=1}}];"
+        },
+        "id": "retrieve",
+        "position": [
+          980,
+          220
+        ]
+      },
+      {
+        "name": "Retrieval Confidence Gate",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.confident === true }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "retrieval-gate",
+        "position": [
+          1240,
+          220
+        ]
+      },
+      {
+        "name": "No-Answer Response",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "return{json:{Timestamp:new Date().toISOString(),QuestionKey:$('Validate Question').item.json.QuestionKey,Answer:\"I'm sorry, I don't have that information.\",Confident:false,Source:'',MatchScore:$json.matchScore||0,Status:'no_answer'}};"
+        },
+        "id": "no-answer",
+        "position": [
+          1480,
+          380
+        ]
+      }
+    ],
+    "connections": {
+      "Ask Question (Webhook)": {
+        "main": [
+          [
+            {
+              "node": "Validate Question",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Manual Trigger (demo)": {
+        "main": [
+          [
+            {
+              "node": "Validate Question",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Validate Question": {
+        "main": [
+          [
+            {
+              "node": "FAQ Chunks",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "FAQ Chunks": {
+        "main": [
+          [
+            {
+              "node": "Set Question",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Set Question": {
+        "main": [
+          [
+            {
+              "node": "Retrieve Best Chunk",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Retrieve Best Chunk": {
+        "main": [
+          [
+            {
+              "node": "Retrieval Confidence Gate",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Retrieval Confidence Gate": {
+        "main": [
+          [
+            {
+              "node": "Gemini (gemma-4-31b-it)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "No-Answer Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gemini (gemma-4-31b-it)": {
+        "main": [
+          [
+            {
+              "node": "Format Answer",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format Answer": {
+        "main": [
+          [
+            {
+              "node": "Sheets: Log Q&A",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "No-Answer Response": {
+        "main": [
+          [
+            {
+              "node": "Sheets: Log Q&A",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Sheets: Log Q&A": {
+        "main": [
+          [
+            {
+              "node": "Respond to Webhook",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1",
+      "errorWorkflow": "NtLq76OQQF3mYyh3",
+      "availableInMCP": true,
+      "saveExecutionProgress": false,
+      "saveManualExecutions": false,
+      "saveExecutionDataSuccess": "none",
+      "saveExecutionDataError": "all"
+    },
+    "staticData": null,
+    "meta": null,
+    "nodeGroups": [],
+    "pinData": null,
+    "versionId": "ab2cb64e-de53-4e69-a39e-01fb59e93f8d",
+    "activeVersionId": null,
+    "versionCounter": 6,
+    "triggerCount": 0,
+    "sourceWorkflowId": null,
+    "tags": [],
+    "shared": [
+      {
+        "updatedAt": "2026-07-26T21:57:17.820Z",
+        "createdAt": "2026-07-26T21:57:17.820Z",
+        "role": "workflow:owner",
+        "workflowId": "FZ6uqJEpsatUC2by",
+        "projectId": "Z8OBeEQoCVNlQZCj",
+        "project": {
+          "updatedAt": "2026-07-24T20:12:21.986Z",
+          "createdAt": "2026-07-24T20:11:25.841Z",
+          "id": "Z8OBeEQoCVNlQZCj",
+          "name": "Sasidhar Sunkesula <www.sasidharsunkesula579@gmail.com>",
+          "type": "personal",
+          "icon": null,
+          "description": null,
+          "customTelemetryTags": [],
+          "creatorId": "66c1d84e-4705-4037-8030-0906fa2af457"
+        }
+      }
+    ],
+    "versionMetadata": {
+      "name": null,
+      "description": null
+    }
+  }
+]
