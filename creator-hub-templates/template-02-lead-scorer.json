@@ -1,0 +1,235 @@
+{
+  "name": "AI Lead Scorer & Slack Alerter (Webhook)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "new-lead",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "t2-webhook",
+      "name": "Webhook: New Lead",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "t2-wh-001"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const b = $json.body || $json;\nconst email = String(b.email||'').trim().toLowerCase();\nconst name = String(b.name||'').trim();\nconst company = String(b.company||'').trim();\nconst message = String(b.message||'').slice(0,2000);\nif (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || name.length<2) return { json: { valid: false } };\nreturn { json: { email, name, company, message, valid: true } };"
+      },
+      "id": "t2-validate",
+      "name": "Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.valid === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "t2-if",
+      "name": "Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "models/gemini-2.0-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Score this B2B lead 0-100 on purchase likelihood. Classify as HOT (70+), WARM (40-69), or COLD (<40).\n\nName: {{ $json.name }}\nEmail: {{ $json.email }}\nCompany: {{ $json.company }}\nMessage: {{ $json.message }}\n\nReturn ONLY JSON: {\"score\": <int>, \"tier\": \"<HOT|WARM|COLD>\", \"reason\": \"<one sentence>\"}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "t2-gemini",
+      "name": "AI: Score Lead",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        780,
+        -80
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "REPLACE_ME",
+          "name": "Google Gemini"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw = $json.content?.parts?.filter(p=>!p.thought).map(p=>p.text||'').join('') ?? $json.text ?? '';\nlet v = null;\nfor (const c of (raw.match(/\\{[^{}]*\\}/g)||[]).reverse()) { try { const p=JSON.parse(c); if(p&&typeof p.score==='number'){v=p;break;} } catch(e){} }\nif(!v) v={score:40,tier:'WARM',reason:'parse fallback'};\nconst lead = $('Validate').item.json;\nreturn { json: { ...lead, score: Math.min(100,Math.max(0,Math.round(v.score))), tier: v.tier, reason: v.reason } };"
+      },
+      "id": "t2-parse",
+      "name": "Parse Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "REPLACE_CHANNEL_ID"
+        },
+        "text": "=:fire: *{{ $json.tier }} LEAD* ({{ $json.score }}/100) — {{ $json.name }} @ {{ $json.company }}\n{{ $json.email }}\nWhy: {{ $json.reason }}\n\"{{ $json.message.slice(0,150) }}\"",
+        "otherOptions": {}
+      },
+      "id": "t2-slack",
+      "name": "Slack: Alert Sales",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1300,
+        -80
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, score: $json.score, tier: $json.tier }) }}",
+        "options": {}
+      },
+      "id": "t2-respond",
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1560,
+        -80
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook: New Lead": {
+      "main": [
+        [
+          {
+            "node": "Validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate": {
+      "main": [
+        [
+          {
+            "node": "Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid?": {
+      "main": [
+        [
+          {
+            "node": "AI: Score Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "AI: Score Lead": {
+      "main": [
+        [
+          {
+            "node": "Parse Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Score": {
+      "main": [
+        [
+          {
+            "node": "Slack: Alert Sales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack: Alert Sales": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -1,0 +1,190 @@
+{
+  "name": "AI Weekly Client Report Generator (Marketing Agencies)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "t1-sched",
+      "name": "Weekly Schedule (Monday 8AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// ── YOUR CLIENTS ──\n// Replace with a Google Sheets node reading your client list.\n// Columns: clientName, contactEmail, company, industry\nconst clients = [\n  { clientName: 'Sarah Mitchell', contactEmail: 'sarah@example.com', company: 'Brightwave Coffee', industry: 'E-commerce' },\n  { clientName: 'Marcus Chen', contactEmail: 'marcus@example.com', company: 'FitLife Studios', industry: 'Fitness' }\n];\nreturn clients.map(c => ({ json: c }));"
+      },
+      "id": "t1-clients",
+      "name": "Client List (edit me)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ── YOUR METRICS ──\n// Replace with Google Sheets / Google Ads API / Meta API.\nconst d = $json;\nreturn { json: { ...d,\n  period: 'Last 7 days',\n  totalSpend: 4800, totalConversions: 423, totalRevenue: 24670,\n  roas: 5.14, prevRoas: 4.48,\n  channels: { 'Google Ads': { spend: 2840, conv: 187, rev: 11220 }, 'Meta Ads': { spend: 1960, conv: 142, rev: 7810 }, 'Email': { spend: 0, conv: 94, rev: 5640 } }\n}};"
+      },
+      "id": "t1-metrics",
+      "name": "Fetch Metrics (edit me)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "models/gemini-2.0-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a senior marketing analyst. Write a 150-200 word weekly performance summary for {{ $json.company }} ({{ $json.industry }}).\n\nData: Spend ${{ $json.totalSpend }}, Conversions {{ $json.totalConversions }}, Revenue ${{ $json.totalRevenue }}, ROAS {{ $json.roas }}x (prev: {{ $json.prevRoas }}x).\nChannels: {{ JSON.stringify($json.channels) }}\n\nInclude: overall trend, best/worst channel, one actionable recommendation. Write in second person. Sign as '— Your Growth Team'. Wrap between <<<REPORT>>> and <<<END>>>."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "t1-gemini",
+      "name": "AI: Write Summary",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        780,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "REPLACE_ME",
+          "name": "Google Gemini"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw = $json.content?.parts?.filter(p=>!p.thought).map(p=>p.text||'').join('') ?? $json.text ?? '';\nlet narrative = '';\nconst s = raw.lastIndexOf('<<<REPORT>>>');\nif (s!==-1) { narrative = raw.slice(s+12); const e = narrative.indexOf('<<<END>>>'); if(e!==-1) narrative=narrative.slice(0,e); narrative=narrative.trim(); }\nif (narrative.length<50) narrative = raw.trim();\nconst d = $('Fetch Metrics (edit me)').item.json;\nreturn { json: { ...d, narrative } };"
+      },
+      "id": "t1-parse",
+      "name": "Parse Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $json.contactEmail }}",
+        "subject": "={{ $json.company }} — Weekly Performance Report",
+        "emailFormat": "text",
+        "message": "=Hi {{ $json.clientName.split(' ')[0] }},\n\nHere's your weekly performance report for {{ $json.period }}:\n\n📊 KEY METRICS\n• Spend: ${{ $json.totalSpend }}\n• Conversions: {{ $json.totalConversions }}\n• Revenue: ${{ $json.totalRevenue }}\n• ROAS: {{ $json.roas }}x\n\n📝 AI INSIGHTS\n{{ $json.narrative }}\n\nQuestions? Just reply to this email.\n\n— Your Growth Team",
+        "options": {}
+      },
+      "id": "t1-gmail",
+      "name": "Gmail: Send Report",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1300,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_ME",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Weekly Schedule (Monday 8AM)": {
+      "main": [
+        [
+          {
+            "node": "Client List (edit me)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Client List (edit me)": {
+      "main": [
+        [
+          {
+            "node": "Fetch Metrics (edit me)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Metrics (edit me)": {
+      "main": [
+        [
+          {
+            "node": "AI: Write Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI: Write Summary": {
+      "main": [
+        [
+          {
+            "node": "Parse Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Summary": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Send Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

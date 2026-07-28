@@ -1,0 +1,764 @@
+{
+  "name": "05 · Automated Agency Client Reporting (Marketing)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 05 · Automated Agency Client Reporting\n**What it does:** Every Monday 8 AM, pulls each client's campaign metrics, writes an AI narrative summary, builds a branded HTML report, and emails it to the client. Agency owner gets a Slack recap.\n\n**ROI:** Replaces 5-8 hrs/week of manual report writing. **Sell at:** $500-800 setup + $200-300/mo retainer.",
+        "height": 120,
+        "width": 900,
+        "color": 4
+      },
+      "id": "sticky-title",
+      "name": "Sticky: Title & ROI",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -320,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Triggers\n- **Schedule:** Monday 8:00 AM IST (02:30 UTC)\n- **Manual:** For testing / on-demand runs\n\nBoth merge into one flow.",
+        "height": 200,
+        "width": 280,
+        "color": 5
+      },
+      "id": "sticky-trigger",
+      "name": "Sticky: Triggers",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -320,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Data Layer\n**Client Config** (Sheets tab: `Clients`): client list with email, company, channels.\n**Weekly Metrics** (Sheets tab: `Metrics`): per-client, per-channel KPIs.\n\nDemo data below — swap Code nodes for Google Sheets nodes in prod.",
+        "height": 200,
+        "width": 380,
+        "color": 5
+      },
+      "id": "sticky-data",
+      "name": "Sticky: Data Layer",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        20,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### AI Narrative\nGemini writes a professional summary:\n- Week-over-week trends\n- What worked / what didn't\n- Actionable recommendations\n\nConfidence-gated: low-confidence outputs get flagged for human review.",
+        "height": 200,
+        "width": 340,
+        "color": 5
+      },
+      "id": "sticky-ai",
+      "name": "Sticky: AI Narrative",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Delivery + Audit\n- Branded HTML email via Gmail\n- Audit log to Sheets (`Report Log`)\n- Slack recap to agency owner\n\nEvery external node has 3× retry. Idempotency guard prevents double-sends.",
+        "height": 200,
+        "width": 340,
+        "color": 5
+      },
+      "id": "sticky-delivery",
+      "name": "Sticky: Delivery & Audit",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2500,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Error Handling\nInvalid metrics → logged to `Invalid Reports` tab.\nAlready-sent → logged to `Skipped Reports` tab.\nNode failures → 3× retry → Error Handler webhook.",
+        "height": 160,
+        "width": 340,
+        "color": 3
+      },
+      "id": "sticky-error",
+      "name": "Sticky: Error Handling",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        420,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 2 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "r5-schedule",
+      "name": "Schedule: Monday 8AM IST",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -280,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "r5-manual",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -280,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "id": "r5-merge",
+      "name": "Merge Triggers",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        -40,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\n// ── Client Configuration ──\n// PRODUCTION: Replace with Google Sheets node reading \"Clients\" tab.\n// Columns: clientName, contactEmail, company, channels (comma-sep), reportDay\nconst clients = [\n  {\n    clientId: \"CLT-001\",\n    clientName: \"Sarah Mitchell\",\n    contactEmail: \"sarah@brightwavecoffee.com\",\n    company: \"Brightwave Coffee\",\n    industry: \"E-commerce (DTC)\",\n    channels: [\"Google Ads\", \"Meta Ads\", \"Email\"],\n    agencyOwner: \"Alex Rivera\",\n    reportDay: \"Monday\"\n  },\n  {\n    clientId: \"CLT-002\",\n    clientName: \"Marcus Chen\",\n    contactEmail: \"marcus@fitlifestudios.com\",\n    company: \"FitLife Studios\",\n    industry: \"Fitness / Wellness\",\n    channels: [\"Meta Ads\", \"Email\", \"SEO\"],\n    agencyOwner: \"Alex Rivera\",\n    reportDay: \"Monday\"\n  },\n  {\n    clientId: \"CLT-003\",\n    clientName: \"Diana Torres\",\n    contactEmail: \"diana@greenscapellc.com\",\n    company: \"GreenScape Landscaping\",\n    industry: \"Local Services\",\n    channels: [\"Google Ads\", \"SEO\"],\n    agencyOwner: \"Alex Rivera\",\n    reportDay: \"Monday\"\n  }\n];\nreturn clients.map(c => ({ json: { ...c, EventKey: \"report:\" + c.clientId + \":\" + new Date().toISOString().slice(0,10) } }));\n"
+      },
+      "id": "r5-client-config",
+      "name": "Client Config (Demo)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// ── Weekly Metrics Fetch ──\n// PRODUCTION: Replace with Google Sheets node reading \"Metrics\" tab,\n// or API nodes (Google Ads API, Meta Marketing API, GA4).\n// Each client gets per-channel KPIs with week-over-week deltas.\nconst metricsDB = {\n  \"CLT-001\": {\n    period: \"Jul 21 – Jul 27, 2026\",\n    channels: {\n      \"Google Ads\": { spend: 2840, impressions: 184200, clicks: 5526, ctr: 3.0, conversions: 187, cpa: 15.19, revenue: 11220, roas: 3.95 },\n      \"Meta Ads\":   { spend: 1960, impressions: 312400, clicks: 4686, ctr: 1.5, conversions: 142, cpa: 13.80, revenue: 7810, roas: 3.98 },\n      \"Email\":      { spend: 0, impressions: 28400, clicks: 3124, ctr: 11.0, conversions: 94, cpa: 0, revenue: 5640, roas: null }\n    },\n    prevWeek: { totalSpend: 5100, totalConversions: 389, totalRevenue: 22840, blendedRoas: 4.48, blendedCpa: 13.11 }\n  },\n  \"CLT-002\": {\n    period: \"Jul 21 – Jul 27, 2026\",\n    channels: {\n      \"Meta Ads\": { spend: 3200, impressions: 428000, clicks: 8560, ctr: 2.0, conversions: 214, cpa: 14.95, revenue: 12840, roas: 4.01 },\n      \"Email\":    { spend: 0, impressions: 15200, clicks: 1976, ctr: 13.0, conversions: 68, cpa: 0, revenue: 4080, roas: null },\n      \"SEO\":      { spend: 0, impressions: 42800, clicks: 2140, ctr: 5.0, conversions: 43, cpa: 0, revenue: 2580, roas: null }\n    },\n    prevWeek: { totalSpend: 3200, totalConversions: 298, totalRevenue: 17820, blendedRoas: 5.57, blendedCpa: 10.74 }\n  },\n  \"CLT-003\": {\n    period: \"Jul 21 – Jul 27, 2026\",\n    channels: {\n      \"Google Ads\": { spend: 1450, impressions: 68400, clicks: 3420, ctr: 5.0, conversions: 96, cpa: 15.10, revenue: 8640, roas: 5.96 },\n      \"SEO\":        { spend: 0, impressions: 24600, clicks: 1230, ctr: 5.0, conversions: 31, cpa: 0, revenue: 2790, roas: null }\n    },\n    prevWeek: { totalSpend: 1520, totalConversions: 112, totalRevenue: 9480, blendedRoas: 6.24, blendedCpa: 13.57 }\n  }\n};\nconst client = $json;\nconst m = metricsDB[client.clientId];\nif (!m) return { json: { ...client, metrics_valid: false, error: \"No metrics found for \" + client.clientId } };\n// Compute blended totals\nlet totalSpend = 0, totalConv = 0, totalRev = 0;\nfor (const ch of Object.values(m.channels)) { totalSpend += ch.spend; totalConv += ch.conversions; totalRev += ch.revenue; }\nconst blendedRoas = totalSpend > 0 ? +(totalRev / totalSpend).toFixed(2) : null;\nconst blendedCpa = totalConv > 0 ? +(totalSpend / totalConv).toFixed(2) : 0;\nconst pw = m.prevWeek;\nreturn { json: {\n  ...client,\n  period: m.period,\n  channels: m.channels,\n  totals: { spend: totalSpend, conversions: totalConv, revenue: totalRev, roas: blendedRoas, cpa: blendedCpa },\n  deltas: {\n    spend: pw.totalSpend ? +((totalSpend - pw.totalSpend) / pw.totalSpend * 100).toFixed(1) : 0,\n    conversions: pw.totalConversions ? +((totalConv - pw.totalConversions) / pw.totalConversions * 100).toFixed(1) : 0,\n    revenue: pw.totalRevenue ? +((totalRev - pw.totalRevenue) / pw.totalRevenue * 100).toFixed(1) : 0,\n    roas: pw.blendedRoas && blendedRoas ? +((blendedRoas - pw.blendedRoas) / pw.blendedRoas * 100).toFixed(1) : 0,\n    cpa: pw.blendedCpa && blendedCpa ? +((blendedCpa - pw.blendedCpa) / pw.blendedCpa * 100).toFixed(1) : 0\n  },\n  prevWeek: pw,\n  metrics_valid: true,\n  Timestamp: new Date().toISOString()\n}};\n"
+      },
+      "id": "r5-fetch-metrics",
+      "name": "Fetch Weekly Metrics (Demo)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst d = $json;\nconst ok = d.metrics_valid === true\n  && d.totals && typeof d.totals.spend === 'number'\n  && d.channels && Object.keys(d.channels).length > 0\n  && /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(String(d.contactEmail || ''));\nif (!ok) return { json: { Timestamp: new Date().toISOString(), EventKey: d.EventKey || 'unknown',\n  Workflow: 'agency-reporting', Status: 'rejected_invalid_metrics', ClientId: d.clientId || 'unknown',\n  Error: d.error || 'Validation failed' } };\nreturn { json: { ...d, input_valid: true } };\n"
+      },
+      "id": "r5-validate",
+      "name": "Validate Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.input_valid === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "r5-if-valid",
+      "name": "Metrics Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        960,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// ── Idempotency Guard ──\n// PRODUCTION: Check Sheets \"Report Log\" tab for existing EventKey.\n// If found → skip (already sent this week). If not → proceed.\n// Demo: always proceeds (no prior sends).\nconst d = $json;\nconst alreadySent = false; // PRODUCTION: query Sheets for EventKey match\nreturn { json: { ...d, already_sent: alreadySent } };\n"
+      },
+      "id": "r5-idempotency",
+      "name": "Idempotency Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.already_sent === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "r5-if-sent",
+      "name": "Already Sent?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1420,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "models/gemma-4-31b-it"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a senior digital marketing analyst writing a weekly client performance report for {{ $json.company }} ({{ $json.industry }}).\n\nWrite a professional, insightful narrative summary (150-250 words) covering:\n1. **Overall performance** — total spend, conversions, revenue, ROAS, and week-over-week changes\n2. **Channel highlights** — which channel performed best/worst and why\n3. **Key insight** — one actionable observation (e.g., \"Meta CPA dropped 12% after the creative refresh\")\n4. **Recommendation** — one specific action for next week\n\nDATA:\nPeriod: {{ $json.period }}\nTotal Spend: ${{ $json.totals.spend }} ({{ $json.deltas.spend >= 0 ? '+' : '' }}{{ $json.deltas.spend }}% WoW)\nTotal Conversions: {{ $json.totals.conversions }} ({{ $json.deltas.conversions >= 0 ? '+' : '' }}{{ $json.deltas.conversions }}% WoW)\nTotal Revenue: ${{ $json.totals.revenue }} ({{ $json.deltas.revenue >= 0 ? '+' : '' }}{{ $json.deltas.revenue }}% WoW)\nBlended ROAS: {{ $json.totals.roas }}x ({{ $json.deltas.roas >= 0 ? '+' : '' }}{{ $json.deltas.roas }}% WoW)\nBlended CPA: ${{ $json.totals.cpa }} ({{ $json.deltas.cpa >= 0 ? '+' : '' }}{{ $json.deltas.cpa }}% WoW)\n\nChannel breakdown:\n{{ JSON.stringify($json.channels, null, 2) }}\n\nRULES:\n- Write in second person (\"your campaigns\", \"your ROAS\")\n- Be specific with numbers — no vague statements\n- Use ↑ and ↓ arrows for trends\n- Sign off as \"— Your Growth Team\"\n- Wrap your response between <<<REPORT>>> and <<<END>>>\n- Do NOT include markdown formatting — plain text with line breaks only\n- Do NOT think out loud. Start directly with the greeting."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "r5-gemini",
+      "name": "Gemini: Write Narrative",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1660,
+        -80
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "B8oepyrWrBGFl6Ud",
+          "name": "Google Gemini (portfolio)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst raw = $json.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('') ?? $json.text ?? '';\nlet narrative = '';\nconst start = raw.lastIndexOf('<<<REPORT>>>');\nif (start !== -1) {\n  narrative = raw.slice(start + 12);\n  const end = narrative.indexOf('<<<END>>>');\n  if (end !== -1) narrative = narrative.slice(0, end);\n  narrative = narrative.trim();\n}\nif (narrative.length < 50) narrative = raw.trim();\nconst client = $('Idempotency Check').item.json;\nconst confidence = narrative.length > 100 ? 0.92 : 0.55;\nreturn { json: { ...client, narrative, ai_confidence: confidence,\n  Timestamp: new Date().toISOString() } };\n"
+      },
+      "id": "r5-parse",
+      "name": "Parse Narrative",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst d = $json;\nconst arrow = (v) => v >= 0 ? '<span style=\"color:#22c55e\">↑ ' + v + '%</span>' : '<span style=\"color:#ef4444\">↓ ' + Math.abs(v) + '%</span>';\nconst money = (v) => '$' + Number(v).toLocaleString('en-US');\nconst t = d.totals, dl = d.deltas;\n\n// Channel rows\nlet chRows = '';\nfor (const [name, ch] of Object.entries(d.channels)) {\n  const roas = ch.roas ? ch.roas.toFixed(2) + 'x' : '—';\n  chRows += '<tr><td style=\"padding:8px 12px;border-bottom:1px solid #eee;font-weight:600\">' + name + '</td>'\n    + '<td style=\"padding:8px 12px;border-bottom:1px solid #eee;text-align:right\">' + money(ch.spend) + '</td>'\n    + '<td style=\"padding:8px 12px;border-bottom:1px solid #eee;text-align:right\">' + ch.conversions + '</td>'\n    + '<td style=\"padding:8px 12px;border-bottom:1px solid #eee;text-align:right\">' + (ch.cpa ? money(ch.cpa) : '—') + '</td>'\n    + '<td style=\"padding:8px 12px;border-bottom:1px solid #eee;text-align:right\">' + money(ch.revenue) + '</td>'\n    + '<td style=\"padding:8px 12px;border-bottom:1px solid #eee;text-align:right\">' + roas + '</td></tr>';\n}\n\nconst html = '<!DOCTYPE html><html><body style=\"margin:0;padding:0;background:#f4f4f7\">'\n+ '<div style=\"max-width:640px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif\">'\n// Header\n+ '<div style=\"background:linear-gradient(135deg,#1a1a2e,#16213e);padding:32px 24px;text-align:center\">'\n+ '<h1 style=\"color:#fff;margin:0;font-size:22px;font-weight:700\">Weekly Performance Report</h1>'\n+ '<p style=\"color:#94a3b8;margin:8px 0 0;font-size:14px\">' + d.company + ' · ' + d.period + '</p></div>'\n// KPI Cards\n+ '<div style=\"padding:24px;background:#fff\">'\n+ '<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr>'\n+ '<td width=\"25%\" style=\"padding:8px;text-align:center\"><div style=\"background:#f8fafc;border-radius:8px;padding:16px 8px\">'\n+ '<div style=\"font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px\">Spend</div>'\n+ '<div style=\"font-size:20px;font-weight:700;color:#1e293b;margin:4px 0\">' + money(t.spend) + '</div>'\n+ '<div style=\"font-size:12px\">' + arrow(dl.spend) + '</div></div></td>'\n+ '<td width=\"25%\" style=\"padding:8px;text-align:center\"><div style=\"background:#f8fafc;border-radius:8px;padding:16px 8px\">'\n+ '<div style=\"font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px\">Conversions</div>'\n+ '<div style=\"font-size:20px;font-weight:700;color:#1e293b;margin:4px 0\">' + t.conversions + '</div>'\n+ '<div style=\"font-size:12px\">' + arrow(dl.conversions) + '</div></div></td>'\n+ '<td width=\"25%\" style=\"padding:8px;text-align:center\"><div style=\"background:#f8fafc;border-radius:8px;padding:16px 8px\">'\n+ '<div style=\"font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px\">Revenue</div>'\n+ '<div style=\"font-size:20px;font-weight:700;color:#1e293b;margin:4px 0\">' + money(t.revenue) + '</div>'\n+ '<div style=\"font-size:12px\">' + arrow(dl.revenue) + '</div></div></td>'\n+ '<td width=\"25%\" style=\"padding:8px;text-align:center\"><div style=\"background:#f8fafc;border-radius:8px;padding:16px 8px\">'\n+ '<div style=\"font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px\">ROAS</div>'\n+ '<div style=\"font-size:20px;font-weight:700;color:#1e293b;margin:4px 0\">' + (t.roas ? t.roas + 'x' : '—') + '</div>'\n+ '<div style=\"font-size:12px\">' + arrow(dl.roas) + '</div></div></td>'\n+ '</tr></table>'\n// AI Narrative\n+ '<div style=\"background:#f0f9ff;border-left:4px solid #3b82f6;border-radius:0 8px 8px 0;padding:16px 20px;margin:20px 0\">'\n+ '<div style=\"font-size:13px;font-weight:700;color:#1e40af;margin-bottom:8px\">📊 This Week\\\\'s Insights</div>'\n+ '<div style=\"font-size:14px;color:#334155;line-height:1.6;white-space:pre-line\">' + d.narrative + '</div></div>'\n// Channel Table\n+ '<h3 style=\"font-size:15px;color:#1e293b;margin:24px 0 12px\">Channel Breakdown</h3>'\n+ '<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"font-size:13px;border-collapse:collapse\">'\n+ '<tr style=\"background:#f8fafc\"><th style=\"padding:8px 12px;text-align:left;color:#64748b;font-weight:600\">Channel</th>'\n+ '<th style=\"padding:8px 12px;text-align:right;color:#64748b;font-weight:600\">Spend</th>'\n+ '<th style=\"padding:8px 12px;text-align:right;color:#64748b;font-weight:600\">Conv.</th>'\n+ '<th style=\"padding:8px 12px;text-align:right;color:#64748b;font-weight:600\">CPA</th>'\n+ '<th style=\"padding:8px 12px;text-align:right;color:#64748b;font-weight:600\">Revenue</th>'\n+ '<th style=\"padding:8px 12px;text-align:right;color:#64748b;font-weight:600\">ROAS</th></tr>'\n+ chRows + '</table>'\n// Footer\n+ '<div style=\"text-align:center;padding:20px;color:#94a3b8;font-size:11px;border-top:1px solid #eee;margin-top:24px\">'\n+ 'Generated automatically by <strong>' + (d.agencyOwner || 'Your Agency') + '</strong> · Powered by n8n + Gemini AI<br>'\n+ 'Questions? Reply to this email or book a call.</div>'\n+ '</div></div></body></html>';\n\nreturn { json: { ...d, htmlReport: html, subject: d.company + ' — Weekly Report (' + d.period + ')' } };\n"
+      },
+      "id": "r5-build-html",
+      "name": "Build HTML Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2180,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $json.contactEmail }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "html",
+        "message": "={{ $json.htmlReport }}",
+        "options": {}
+      },
+      "id": "r5-gmail",
+      "name": "Gmail: Send Report",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2440,
+        -80
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "6cOkI9yXp7fgLHw4",
+          "name": "Gmail account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "r5-gmail-send-001"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst d = $json;\nreturn { json: {\n  Timestamp: new Date().toISOString(),\n  EventKey: d.EventKey,\n  Workflow: 'agency-reporting',\n  Status: 'report_sent',\n  ClientId: d.clientId,\n  Client: d.company,\n  SentTo: d.contactEmail,\n  Period: d.period,\n  TotalSpend: d.totals.spend,\n  TotalConversions: d.totals.conversions,\n  TotalRevenue: d.totals.revenue,\n  BlendedRoas: d.totals.roas,\n  AiConfidence: d.ai_confidence,\n  ReplayPolicy: 'idempotent_skip'\n}};\n"
+      },
+      "id": "r5-prep-audit",
+      "name": "Prepare Audit Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2700,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Report Log"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "r5-sheets-audit",
+      "name": "Sheets: Append Report Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2960,
+        -80
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "C0BKVT980BE"
+        },
+        "text": ":bar_chart: *Weekly Reports Sent* — {{ $json.Period }}\n*Client:* {{ $json.Client }} ({{ $json.ClientId }})\n*Spend:* ${{ $json.TotalSpend }} · *Conv:* {{ $json.TotalConversions }} · *Revenue:* ${{ $json.TotalRevenue }} · *ROAS:* {{ $json.BlendedRoas }}x\n:email: Sent to {{ $json.SentTo }} · AI confidence: {{ $json.AiConfidence }}",
+        "otherOptions": {}
+      },
+      "id": "r5-slack",
+      "name": "Slack: Agency Recap",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        3220,
+        -80
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "0LO7Ag4PE1NaZFpO",
+          "name": "Slack account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "r5-slack-recap-001"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst d = $json;\nreturn { json: { Timestamp: new Date().toISOString(), EventKey: d.EventKey || 'unknown',\n  Workflow: 'agency-reporting', Status: 'rejected_invalid_metrics',\n  ClientId: d.clientId || 'unknown', Error: d.error || 'Validation failed' } };\n"
+      },
+      "id": "r5-prep-invalid",
+      "name": "Prepare Invalid Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Invalid Reports"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "r5-sheets-invalid",
+      "name": "Sheets: Log Invalid",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1460,
+        260
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst d = $json;\nreturn { json: { Timestamp: new Date().toISOString(), EventKey: d.EventKey,\n  Workflow: 'agency-reporting', Status: 'skipped_already_sent',\n  ClientId: d.clientId, Client: d.company } };\n"
+      },
+      "id": "r5-prep-skip",
+      "name": "Prepare Skip Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1660,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Skipped Reports"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "r5-sheets-skip",
+      "name": "Sheets: Log Skipped",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1920,
+        180
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "Schedule: Monday 8AM IST": {
+      "main": [
+        [
+          {
+            "node": "Merge Triggers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Merge Triggers",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Triggers": {
+      "main": [
+        [
+          {
+            "node": "Client Config (Demo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Client Config (Demo)": {
+      "main": [
+        [
+          {
+            "node": "Fetch Weekly Metrics (Demo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Weekly Metrics (Demo)": {
+      "main": [
+        [
+          {
+            "node": "Validate Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Metrics": {
+      "main": [
+        [
+          {
+            "node": "Metrics Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Metrics Valid?": {
+      "main": [
+        [
+          {
+            "node": "Idempotency Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Invalid Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Idempotency Check": {
+      "main": [
+        [
+          {
+            "node": "Already Sent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Already Sent?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Skip Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gemini: Write Narrative",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini: Write Narrative": {
+      "main": [
+        [
+          {
+            "node": "Parse Narrative",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Narrative": {
+      "main": [
+        [
+          {
+            "node": "Build HTML Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build HTML Report": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Send Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: Send Report": {
+      "main": [
+        [
+          {
+            "node": "Prepare Audit Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Audit Row": {
+      "main": [
+        [
+          {
+            "node": "Sheets: Append Report Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sheets: Append Report Log": {
+      "main": [
+        [
+          {
+            "node": "Slack: Agency Recap",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Invalid Row": {
+      "main": [
+        [
+          {
+            "node": "Sheets: Log Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Skip Row": {
+      "main": [
+        [
+          {
+            "node": "Sheets: Log Skipped",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

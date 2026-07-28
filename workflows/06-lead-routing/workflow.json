@@ -1,0 +1,845 @@
+{
+  "name": "06 · Lead Capture → Enrich → AI Score → CRM + Reply (Sales)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 06 · Lead Capture → Enrich → AI Score → CRM + Instant Reply\n**What it does:** Webhook catches a form fill → validates → enriches company data → AI scores the lead (0-100) → routes HOT leads to Slack for instant sales follow-up, sends a personalized instant reply to the lead, logs everything to CRM (Sheets).\n\n**ROI:** Speed-to-lead is everything — contacting a lead in <5 min is 21x more likely to close. **Sell at:** $600-1000 setup + $200-350/mo retainer.",
+        "height": 130,
+        "width": 920,
+        "color": 4
+      },
+      "id": "s6-title",
+      "name": "Sticky: Title & ROI",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -340,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Intake Layer\n**Webhook:** POST /lead — accepts form submissions.\n**Validate:** email format, required fields, size limits.\n**Dedup:** idempotency key = email+date.\n\nInvalid → logged to `Invalid Leads`. Duplicate → logged to `Duplicate Leads`.",
+        "height": 220,
+        "width": 300,
+        "color": 5
+      },
+      "id": "s6-intake",
+      "name": "Sticky: Intake & Validation",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -340,
+        -70
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Enrichment\n**PRODUCTION:** Clearbit / Apollo / Hunter.io API node to fetch company size, industry, revenue, tech stack.\n\n**Demo:** simulated enrichment data. Enrichment failure is NON-FATAL — lead still flows through with a flag.",
+        "height": 220,
+        "width": 300,
+        "color": 5
+      },
+      "id": "s6-enrich",
+      "name": "Sticky: Enrichment",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        -70
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### AI Lead Scoring\nGemini scores 0-100 based on:\n- Firmographics (company size, industry fit)\n- Intent signals (message content, urgency)\n- Budget indicators\n\n**Routing:** ≥70 = HOT → Slack alert. <70 = WARM/COLD → nurture reply.",
+        "height": 220,
+        "width": 320,
+        "color": 5
+      },
+      "id": "s6-score",
+      "name": "Sticky: AI Scoring & Routing",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1080,
+        -70
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Delivery + CRM\n- **Instant reply** to lead (personalized by AI)\n- **HOT:** Slack #sales-alerts with full context\n- **CRM:** append to Sheets `Leads` tab\n- **Audit:** every decision logged\n\n3× retry on all external calls.",
+        "height": 220,
+        "width": 320,
+        "color": 5
+      },
+      "id": "s6-deliver",
+      "name": "Sticky: Delivery & CRM",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2380,
+        -70
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Error Handling\nInvalid input → `Invalid Leads` tab.\nDuplicate → `Duplicate Leads` tab.\nEnrichment fail → continues with `enriched:false`.\nNode failure → 3× retry → Error Handler webhook.",
+        "height": 150,
+        "width": 360,
+        "color": 3
+      },
+      "id": "s6-error",
+      "name": "Sticky: Error Handling",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        420,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "l6-webhook",
+      "name": "Webhook: Lead In",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -300,
+        20
+      ],
+      "webhookId": "l6-webhook-lead-001"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst b = $json.body || $json;\nconst email = String(b.email || '').trim().toLowerCase();\nconst name = String(b.name || b.fullName || '').trim();\nconst company = String(b.company || '').trim();\nconst message = String(b.message || b.comments || '').slice(0, 4000);\nconst source = String(b.source || 'website-form').slice(0, 80);\nconst ok = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)\n  && name.length >= 2 && name.length <= 120\n  && company.length >= 1 && company.length <= 160;\nconst today = new Date().toISOString().slice(0,10);\nconst idemKey = 'lead:' + email + ':' + today;\nif (!ok) return { json: { Timestamp: new Date().toISOString(), EventKey: idemKey,\n  Workflow: 'lead-routing', Status: 'rejected_invalid_input',\n  RawEmail: email || 'missing', Reason: !email ? 'missing_email' : (name.length<2?'bad_name':'bad_company') } };\nreturn { json: { email, name, company, message, source, EventKey: idemKey,\n  input_valid: true, receivedAt: new Date().toISOString() } };\n"
+      },
+      "id": "l6-validate",
+      "name": "Validate Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -40,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.input_valid === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "l6-if-valid",
+      "name": "Lead Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        200,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// ── Deduplication / Idempotency ──\n// PRODUCTION: query Sheets \"Leads\" tab for existing EventKey (email+date).\n// If found → mark duplicate. Demo: always new.\nconst d = $json;\nconst isDuplicate = false; // PRODUCTION: Sheets lookup on EventKey\nreturn { json: { ...d, is_duplicate: isDuplicate } };\n"
+      },
+      "id": "l6-dedup",
+      "name": "Dedup Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.is_duplicate === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "l6-if-dup",
+      "name": "Duplicate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        680,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// ── Company Enrichment ──\n// PRODUCTION: Clearbit/Apollo/Hunter API node. Wrap in try/catch — enrichment\n// failure must NOT block the lead. Set enriched:false on failure.\nconst d = $json;\nconst firmo = {\n  \"gmail.com\": { industry: \"Individual / SMB\", employees: \"1-10\", revenue: \"<$1M\", region: \"Unknown\" },\n};\n// Simulated enrichment keyed by email domain\nconst domain = d.email.split('@')[1] || '';\nconst demoDB = {\n  \"acmecorp.com\":     { industry: \"SaaS / B2B Software\", employees: \"51-200\", revenue: \"$5M-$20M\", region: \"North America\", tech: [\"Salesforce\",\"HubSpot\",\"AWS\"] },\n  \"globex.io\":        { industry: \"Fintech\", employees: \"201-500\", revenue: \"$20M-$50M\", region: \"Europe\", tech: [\"Snowflake\",\"Segment\"] },\n  \"initech.com\":      { industry: \"Manufacturing\", employees: \"11-50\", revenue: \"$1M-$5M\", region: \"North America\", tech: [\"QuickBooks\"] },\n  \"brightwavecoffee.com\": { industry: \"E-commerce (DTC)\", employees: \"11-50\", revenue: \"$1M-$5M\", region: \"North America\", tech: [\"Shopify\",\"Klaviyo\"] }\n};\nlet enriched = demoDB[domain] || firmo[domain] || null;\nif (!enriched) {\n  // Unknown domain — generic SMB profile, flag as not enriched\n  return { json: { ...d, enriched: false, firmographics: { industry: \"Unknown\", employees: \"Unknown\", revenue: \"Unknown\", region: \"Unknown\" } } };\n}\nreturn { json: { ...d, enriched: true, firmographics: enriched } };\n"
+      },
+      "id": "l6-enrich",
+      "name": "Enrich Company (Demo)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "models/gemma-4-31b-it"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a B2B sales development expert. Score this inbound lead from 0-100 on purchase likelihood, and classify it as HOT (70-100), WARM (40-69), or COLD (0-39).\n\nLEAD:\nName: {{ $json.name }}\nEmail: {{ $json.email }}\nCompany: {{ $json.company }}\nMessage: {{ $json.message }}\nSource: {{ $json.source }}\n\nFirmographics:\nIndustry: {{ $json.firmographics.industry }}\nCompany Size: {{ $json.firmographics.employees }} employees\nRevenue: {{ $json.firmographics.revenue }}\nRegion: {{ $json.firmographics.region }}\n\nScore based on: (1) company size & revenue fit, (2) message intent & urgency, (3) budget signals, (4) industry fit for a B2B SaaS/automation buyer.\n\nRespond with ONLY valid JSON — no markdown, no commentary:\n{\"score\": <0-100 integer>, \"tier\": \"<HOT|WARM|COLD>\", \"reason\": \"<one sentence>\", \"suggested_next_step\": \"<one specific action for the sales rep>\"}\n\nYour ENTIRE response must be that single JSON object."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "l6-gemini-score",
+      "name": "Gemini: Score Lead",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1180,
+        -140
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "B8oepyrWrBGFl6Ud",
+          "name": "Google Gemini (portfolio)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst raw = $json.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('') ?? $json.text ?? '';\nconst cleaned = raw.replace(/```json/gi,'```').replace(/```/g,'').trim();\nlet verdict = null;\nconst cands = cleaned.match(/\\{[^{}]*\\}/g) ?? [];\nfor (const c of cands.reverse()) {\n  try { const p = JSON.parse(c); if (p && typeof p.score === 'number') { verdict = p; break; } } catch(e){}\n}\nif (!verdict) verdict = { score: 40, tier: 'WARM', reason: 'Score parse fallback', suggested_next_step: 'Manual review' };\nverdict.score = Math.max(0, Math.min(100, Math.round(verdict.score)));\nif (!['HOT','WARM','COLD'].includes(verdict.tier)) {\n  verdict.tier = verdict.score >= 70 ? 'HOT' : (verdict.score >= 40 ? 'WARM' : 'COLD');\n}\nconst lead = $('Enrich Company (Demo)').item.json;\nreturn { json: { ...lead, leadScore: verdict.score, tier: verdict.tier,\n  scoreReason: verdict.reason, nextStep: verdict.suggested_next_step,\n  scoredAt: new Date().toISOString() } };\n"
+      },
+      "id": "l6-parse-score",
+      "name": "Parse Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.tier === 'HOT' }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "HOT"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ ['WARM','COLD'].includes($json.tier) }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "WARM/COLD"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "l6-route",
+      "name": "Route by Tier",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1700,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "C0BKVT980BE"
+        },
+        "text": ":fire: *HOT LEAD* — Score {{ $json.leadScore }}/100\n*{{ $json.name }}* · {{ $json.company }}\n*Email:* {{ $json.email }}\n*Industry:* {{ $json.firmographics.industry }} · *Size:* {{ $json.firmographics.employees }} · *Revenue:* {{ $json.firmographics.revenue }}\n*Why hot:* {{ $json.scoreReason }}\n:dart: *Next step:* {{ $json.nextStep }}\n:speech_balloon: _\"{{ $json.message.slice(0,200) }}\"_\n:clock1: Received {{ $json.receivedAt }} — *contact within 5 minutes*",
+        "otherOptions": {}
+      },
+      "id": "l6-slack-hot",
+      "name": "Slack: #sales-alerts (HOT)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1980,
+        -220
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "0LO7Ag4PE1NaZFpO",
+          "name": "Slack account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "l6-slack-hot-001"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "models/gemma-4-31b-it"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a friendly, professional sales rep. Write a short, warm, personalized reply email (under 120 words) to this inbound lead. Thank them, acknowledge their specific need (reference their message), and propose a concrete next step (a 15-min call). Do NOT be salesy or pushy. Sign as \"Jordan — Growth Team\".\n\nLEAD: {{ $json.name }} at {{ $json.company }} ({{ $json.firmographics.industry }})\nTHEIR MESSAGE: {{ $json.message }}\nLEAD TIER: {{ $json.tier }}\n\nWrap your reply between <<<REPLY>>> and <<<END>>>. Start directly with \"Hi {{ $json.name.split(' ')[0] }},\" — no preamble, no thinking out loud."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "l6-gemini-reply",
+      "name": "Gemini: Draft Reply",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1980,
+        40
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "B8oepyrWrBGFl6Ud",
+          "name": "Google Gemini (portfolio)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst raw = $json.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('') ?? $json.text ?? '';\nlet draft = '';\nconst s = raw.lastIndexOf('<<<REPLY>>>');\nif (s !== -1) { draft = raw.slice(s+11); const e = draft.indexOf('<<<END>>>'); if (e!==-1) draft = draft.slice(0,e); draft = draft.trim(); }\nif (draft.length < 30) draft = raw.trim();\nconst lead = $('Parse Score').item.json;\nreturn { json: { ...lead, replyDraft: draft } };\n"
+      },
+      "id": "l6-parse-reply",
+      "name": "Parse Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $json.email }}",
+        "subject": "=Thanks for reaching out, {{ $json.name.split(' ')[0] }}!",
+        "emailFormat": "text",
+        "message": "={{ $json.replyDraft }}",
+        "options": {}
+      },
+      "id": "l6-gmail",
+      "name": "Gmail: Send Instant Reply",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2500,
+        40
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "6cOkI9yXp7fgLHw4",
+          "name": "Gmail account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "l6-gmail-reply-001"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst d = $('Parse Reply').item.json;\nreturn { json: {\n  Timestamp: new Date().toISOString(),\n  EventKey: d.EventKey,\n  Workflow: 'lead-routing',\n  Status: 'lead_processed',\n  Name: d.name, Email: d.email, Company: d.company,\n  Source: d.source, Industry: (d.firmographics||{}).industry || 'Unknown',\n  CompanySize: (d.firmographics||{}).employees || 'Unknown',\n  Revenue: (d.firmographics||{}).revenue || 'Unknown',\n  Enriched: d.enriched || false, LeadScore: d.leadScore, Tier: d.tier,\n  ScoreReason: d.scoreReason, NextStep: d.nextStep,\n  ReplySent: true, ReplayPolicy: 'idempotent_skip'\n}};\n"
+      },
+      "id": "l6-prep-crm",
+      "name": "Prepare CRM Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2760,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "l6-sheets-crm",
+      "name": "Sheets: Append to CRM",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3020,
+        40
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, leadScore: $json.LeadScore, tier: $json.Tier, message: 'Lead received and processed' }) }}",
+        "options": {}
+      },
+      "id": "l6-respond",
+      "name": "Respond: 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3280,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const d=$json;return{json:{Timestamp:new Date().toISOString(),EventKey:d.EventKey||'unknown',Workflow:'lead-routing',Status:'rejected_invalid_input',RawEmail:d.RawEmail||'',Reason:d.Reason||'unknown'}};"
+      },
+      "id": "l6-prep-invalid",
+      "name": "Prepare Invalid Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Invalid Leads"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "l6-sheets-invalid",
+      "name": "Sheets: Log Invalid",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        700,
+        220
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const d=$json;return{json:{Timestamp:new Date().toISOString(),EventKey:d.EventKey,Workflow:'lead-routing',Status:'skipped_duplicate',Email:d.email,Company:d.company}};"
+      },
+      "id": "l6-prep-dup",
+      "name": "Prepare Dup Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Duplicate Leads"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "l6-sheets-dup",
+      "name": "Sheets: Log Duplicate",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1180,
+        160
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "Webhook: Lead In": {
+      "main": [
+        [
+          {
+            "node": "Validate Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Lead": {
+      "main": [
+        [
+          {
+            "node": "Lead Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead Valid?": {
+      "main": [
+        [
+          {
+            "node": "Dedup Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Invalid Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup Check": {
+      "main": [
+        [
+          {
+            "node": "Duplicate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Duplicate?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Dup Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enrich Company (Demo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrich Company (Demo)": {
+      "main": [
+        [
+          {
+            "node": "Gemini: Score Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini: Score Lead": {
+      "main": [
+        [
+          {
+            "node": "Parse Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Score": {
+      "main": [
+        [
+          {
+            "node": "Route by Tier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Tier": {
+      "main": [
+        [
+          {
+            "node": "Slack: #sales-alerts (HOT)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gemini: Draft Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack: #sales-alerts (HOT)": {
+      "main": [
+        [
+          {
+            "node": "Gemini: Draft Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini: Draft Reply": {
+      "main": [
+        [
+          {
+            "node": "Parse Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Reply": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Send Instant Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: Send Instant Reply": {
+      "main": [
+        [
+          {
+            "node": "Prepare CRM Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare CRM Row": {
+      "main": [
+        [
+          {
+            "node": "Sheets: Append to CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sheets: Append to CRM": {
+      "main": [
+        [
+          {
+            "node": "Respond: 200 OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Invalid Row": {
+      "main": [
+        [
+          {
+            "node": "Sheets: Log Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Dup Row": {
+      "main": [
+        [
+          {
+            "node": "Sheets: Log Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

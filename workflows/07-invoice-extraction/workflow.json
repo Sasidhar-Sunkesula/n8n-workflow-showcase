@@ -1,0 +1,763 @@
+{
+  "name": "07 · Invoice & Document Extraction Pipeline (Finance)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 07 · Invoice & Document Extraction Pipeline (Finance/Ops)\n**What it does:** Watches a Gmail inbox for invoice/receipt attachments → downloads PDF → AI extracts structured line items (vendor, date, amounts, tax, PO#) → validates against expected schema → logs to Sheets ledger → flags anomalies → Slack alert to finance team.\n\n**ROI:** Replaces 3-6 hrs/week of manual data entry. Catches duplicate invoices. **Sell at:** $700-1200 setup + $250-400/mo retainer. **Boring = sells.**",
+        "height": 140,
+        "width": 940,
+        "color": 4
+      },
+      "id": "s7-title",
+      "name": "Sticky: Title & ROI",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Intake Layer\n**Gmail Trigger:** polls for new emails with PDF attachments from known vendor patterns.\n**Demo:** manual trigger with sample invoice data.\n\nValidates: file type, size (<10MB), sender domain.",
+        "height": 200,
+        "width": 300,
+        "color": 5
+      },
+      "id": "s7-intake",
+      "name": "Sticky: Intake",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### AI Extraction\nGemini reads the invoice text/image and extracts:\n- Vendor name, invoice #, date, due date\n- Line items (description, qty, unit price, total)\n- Subtotal, tax, total, currency\n- PO number, payment terms\n\nStructured JSON output with confidence per field.",
+        "height": 200,
+        "width": 320,
+        "color": 5
+      },
+      "id": "s7-extract",
+      "name": "Sticky: AI Extraction",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Validation + Ledger\n- Schema validation (required fields, numeric checks)\n- **Duplicate detection:** invoice # + vendor + amount\n- **Anomaly detection:** amount > 2x rolling average\n- Append to Sheets `Invoice Ledger`\n- Duplicates → `Duplicate Invoices` tab",
+        "height": 200,
+        "width": 320,
+        "color": 5
+      },
+      "id": "s7-validate",
+      "name": "Sticky: Validation & Ledger",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Alerts + Audit\n- **Normal:** Slack summary to #finance\n- **Anomaly/Duplicate:** Slack alert with ⚠️ flag\n- **Audit:** every extraction logged with confidence\n- **Error:** failed extractions → `Failed Extractions`\n\n3× retry on all external calls.",
+        "height": 200,
+        "width": 320,
+        "color": 5
+      },
+      "id": "s7-alert",
+      "name": "Sticky: Alerts & Audit",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2280,
+        -80
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "i7-manual",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -320,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\n// ── Sample Invoices ──\n// PRODUCTION: Replace with Gmail Trigger node watching for emails with\n// PDF attachments matching vendor patterns. Then use Gmail node to download\n// the attachment, and a PDF extraction node (or send image to Gemini Vision).\nconst invoices = [\n  {\n    emailId: \"inv_email_001\",\n    from: \"billing@cloudhost-pro.com\",\n    subject: \"Invoice #CH-2026-4821 — July Hosting\",\n    receivedAt: \"2026-07-28T06:15:00Z\",\n    fileName: \"invoice_CH-2026-4821.pdf\",\n    fileSizeKB: 84,\n    // Simulated OCR / extracted text from the PDF\n    extractedText: \"INVOICE\\nCloudHost Pro LLC\\n1200 Server Lane, Austin, TX 78701\\nInvoice #: CH-2026-4821\\nDate: 2026-07-01\\nDue Date: 2026-07-31\\nBill To: Acme Corp\\nPO #: PO-7742\\n\\nDescription                    Qty   Unit Price   Total\\nDedicated Server (m5.2xlarge)   1     $420.00      $420.00\\nManaged Backup (500GB)          1     $85.00       $85.00\\nSSL Certificate (wildcard)      1     $45.00       $45.00\\nPremium Support                 1     $150.00      $150.00\\n\\nSubtotal: $700.00\\nTax (8.25%): $57.75\\nTotal Due: $757.75 USD\\nPayment Terms: Net 30\"\n  },\n  {\n    emailId: \"inv_email_002\",\n    from: \"accounts@officesupply-depot.com\",\n    subject: \"Your Office Depot Order Receipt #OD-88123\",\n    receivedAt: \"2026-07-28T09:42:00Z\",\n    fileName: \"receipt_OD-88123.pdf\",\n    fileSizeKB: 62,\n    extractedText: \"RECEIPT\\nOffice Supply Depot\\nOrder #: OD-88123\\nDate: 2026-07-27\\nShip To: Acme Corp, 456 Business Ave\\n\\nItem                          Qty   Price\\nErgonomic Chair (Herman M.)    2    $890.00 each = $1,780.00\\nStanding Desk (Uplift V2)      2    $650.00 each = $1,300.00\\nMonitor Arm (dual)             4    $79.00 each  = $316.00\\n\\nSubtotal: $3,396.00\\nShipping: $49.99\\nCA Sales Tax (7.25%): $249.61\\nTotal: $3,695.60 USD\\nPaid via: Visa ****4421\"\n  },\n  {\n    emailId: \"inv_email_003\",\n    from: \"billing@cloudhost-pro.com\",\n    subject: \"Invoice #CH-2026-4821 — July Hosting (DUPLICATE)\",\n    receivedAt: \"2026-07-28T14:05:00Z\",\n    fileName: \"invoice_CH-2026-4821_copy.pdf\",\n    fileSizeKB: 84,\n    extractedText: \"INVOICE\\nCloudHost Pro LLC\\nInvoice #: CH-2026-4821\\nDate: 2026-07-01\\nDue Date: 2026-07-31\\nBill To: Acme Corp\\n\\nDescription                    Qty   Unit Price   Total\\nDedicated Server (m5.2xlarge)   1     $420.00      $420.00\\nManaged Backup (500GB)          1     $85.00       $85.00\\nSSL Certificate (wildcard)      1     $45.00       $45.00\\nPremium Support                 1     $150.00      $150.00\\n\\nSubtotal: $700.00\\nTax (8.25%): $57.75\\nTotal Due: $757.75 USD\"\n  }\n];\nreturn invoices.map(inv => ({ json: { ...inv, EventKey: \"invoice:\" + inv.emailId } }));\n"
+      },
+      "id": "i7-sample",
+      "name": "Sample Invoices (Demo)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -60,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst d = $json;\nconst ok = d.extractedText && d.extractedText.length > 50\n  && d.fileName && /\\.(pdf|png|jpg|jpeg)$/i.test(d.fileName)\n  && (d.fileSizeKB || 0) <= 10240\n  && /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(String(d.from || ''));\nif (!ok) return { json: { Timestamp: new Date().toISOString(), EventKey: d.EventKey || 'unknown',\n  Workflow: 'invoice-extraction', Status: 'rejected_invalid_input',\n  FileName: d.fileName || 'missing', Reason: !d.extractedText ? 'no_text' : 'bad_file' } };\nreturn { json: { ...d, input_valid: true } };\n"
+      },
+      "id": "i7-validate",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.input_valid === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "i7-if-valid",
+      "name": "Input Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "models/gemma-4-31b-it"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an expert accounts-payable clerk. Extract structured data from this invoice/receipt text. Return ONLY valid JSON — no markdown, no commentary.\n\nINVOICE TEXT:\n{{ $json.extractedText }}\n\nReturn exactly this JSON shape:\n{\n  \"vendor\": \"<company name>\",\n  \"invoiceNumber\": \"<invoice/receipt number>\",\n  \"invoiceDate\": \"<YYYY-MM-DD>\",\n  \"dueDate\": \"<YYYY-MM-DD or null>\",\n  \"billTo\": \"<who is being billed>\",\n  \"poNumber\": \"<PO number or null>\",\n  \"currency\": \"<USD|EUR|GBP|INR>\",\n  \"lineItems\": [{\"description\": \"<item>\", \"quantity\": <number>, \"unitPrice\": <number>, \"total\": <number>}],\n  \"subtotal\": <number>,\n  \"tax\": <number>,\n  \"taxRate\": \"<percentage string or null>\",\n  \"total\": <number>,\n  \"paymentTerms\": \"<e.g. Net 30 or null>\",\n  \"documentType\": \"<invoice|receipt>\"\n}\n\nIMPORTANT: All monetary values as plain numbers (no $ signs, no commas). If a field is not present, use null. Your ENTIRE response must be that single JSON object."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "i7-gemini",
+      "name": "Gemini: Extract Fields",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        700,
+        -60
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "B8oepyrWrBGFl6Ud",
+          "name": "Google Gemini (portfolio)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst raw = $json.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('') ?? $json.text ?? '';\nconst cleaned = raw.replace(/```json/gi,'```').replace(/```/g,'').trim();\nlet data = null;\nconst cands = cleaned.match(/\\{[\\s\\S]*\\}/g) ?? [];\nfor (const c of cands.reverse()) {\n  try { const p = JSON.parse(c); if (p && p.vendor && p.total !== undefined) { data = p; break; } } catch(e){}\n}\nconst inv = $('Validate Input').item.json;\nif (!data) return { json: { ...inv, extraction_ok: false, error: 'Gemini output unparseable' } };\n// Basic numeric sanity\nconst nums = ['subtotal','tax','total'];\nfor (const k of nums) { if (typeof data[k] === 'string') data[k] = parseFloat(data[k].replace(/[^0-9.-]/g,'')) || 0; }\nif (!Array.isArray(data.lineItems)) data.lineItems = [];\nconst confidence = (data.vendor && data.invoiceNumber && data.total > 0) ? 0.93 : 0.6;\nreturn { json: { ...inv, ...data, extraction_ok: true, ai_confidence: confidence,\n  extractedAt: new Date().toISOString() } };\n"
+      },
+      "id": "i7-parse",
+      "name": "Parse Extraction",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.extraction_ok === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "i7-if-extracted",
+      "name": "Extraction OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// ── Duplicate & Anomaly Detection ──\n// PRODUCTION: query Sheets \"Invoice Ledger\" for matching invoiceNumber+vendor+total.\n// Also compute rolling average per vendor for anomaly detection.\nconst d = $json;\n// Demo: simulate known duplicates and anomaly thresholds\nconst knownLedger = [\n  { invoiceNumber: \"CH-2026-4821\", vendor: \"CloudHost Pro LLC\", total: 757.75 },\n];\nconst vendorAvg = { \"CloudHost Pro LLC\": 740, \"Office Supply Depot\": 500 };\nconst isDup = knownLedger.some(k =>\n  k.invoiceNumber === d.invoiceNumber && k.vendor === d.vendor && Math.abs(k.total - d.total) < 0.01);\nconst avg = vendorAvg[d.vendor] || d.total;\nconst isAnomaly = d.total > avg * 2;\nreturn { json: { ...d, is_duplicate: isDup, is_anomaly: isAnomaly,\n  vendorAvgAmount: avg, anomalyRatio: +(d.total / avg).toFixed(2) } };\n"
+      },
+      "id": "i7-detect",
+      "name": "Detect Duplicates & Anomalies",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1460,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.is_duplicate === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "i7-if-dup",
+      "name": "Duplicate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1720,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst d = $json;\nreturn { json: {\n  Timestamp: new Date().toISOString(),\n  EventKey: d.EventKey,\n  Workflow: 'invoice-extraction',\n  Status: d.is_anomaly ? 'logged_anomaly' : 'logged_normal',\n  Vendor: d.vendor, InvoiceNumber: d.invoiceNumber,\n  InvoiceDate: d.invoiceDate, DueDate: d.dueDate,\n  DocumentType: d.documentType, Currency: d.currency,\n  LineItemCount: (d.lineItems || []).length,\n  Subtotal: d.subtotal, Tax: d.tax, Total: d.total,\n  PoNumber: d.poNumber, PaymentTerms: d.paymentTerms,\n  AiConfidence: d.ai_confidence,\n  IsDuplicate: d.is_duplicate, IsAnomaly: d.is_anomaly,\n  AnomalyRatio: d.anomalyRatio,\n  SourceEmail: d.from, SourceFile: d.fileName,\n  ReplayPolicy: 'idempotent_skip'\n}};\n"
+      },
+      "id": "i7-prep-ledger",
+      "name": "Prepare Ledger Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Invoice Ledger"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "i7-sheets-ledger",
+      "name": "Sheets: Append Ledger",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2240,
+        -220
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "C0BKVT980BE"
+        },
+        "text": ":receipt: *Invoice Processed* — {{ $json.Vendor }}\n*Invoice:* {{ $json.InvoiceNumber }} · *Total:* {{ $json.Currency }} {{ $json.Total }}\n*Date:* {{ $json.InvoiceDate }} · *Due:* {{ $json.DueDate }} · *PO:* {{ $json.PoNumber || '—' }}\n*Lines:* {{ $json.LineItemCount }} · *AI Confidence:* {{ $json.AiConfidence }}\n{{ $json.IsAnomaly ? ':warning: *ANOMALY:* ' + $json.AnomalyRatio + 'x vendor average (' + $json.VendorAvgAmount + ')' : ':white_check_mark: Normal' }}",
+        "otherOptions": {}
+      },
+      "id": "i7-slack",
+      "name": "Slack: #finance Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        2500,
+        -220
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "0LO7Ag4PE1NaZFpO",
+          "name": "Slack account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "i7-slack-fin-001"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst d = $json;\nreturn { json: { Timestamp: new Date().toISOString(), EventKey: d.EventKey,\n  Workflow: 'invoice-extraction', Status: 'skipped_duplicate',\n  Vendor: d.vendor, InvoiceNumber: d.invoiceNumber, Total: d.total,\n  SourceEmail: d.from, SourceFile: d.fileName } };\n"
+      },
+      "id": "i7-prep-dup",
+      "name": "Prepare Dup Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Duplicate Invoices"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "i7-sheets-dup",
+      "name": "Sheets: Log Duplicate",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2240,
+        40
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "C0BKVT980BE"
+        },
+        "text": ":rotating_light: *DUPLICATE INVOICE DETECTED*\n*Vendor:* {{ $json.Vendor }} · *Invoice #:* {{ $json.InvoiceNumber }} · *Total:* {{ $json.Total }}\n*Source:* {{ $json.SourceEmail }} ({{ $json.SourceFile }})\n:warning: This invoice matches an existing ledger entry. Do NOT pay twice. Review in Duplicate Invoices tab.",
+        "otherOptions": {}
+      },
+      "id": "i7-slack-dup",
+      "name": "Slack: Duplicate Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        2500,
+        40
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "0LO7Ag4PE1NaZFpO",
+          "name": "Slack account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "i7-slack-dup-001"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst d = $json;\nreturn { json: { Timestamp: new Date().toISOString(), EventKey: d.EventKey || 'unknown',\n  Workflow: 'invoice-extraction', Status: 'extraction_failed',\n  SourceEmail: d.from || '', SourceFile: d.fileName || '',\n  Error: d.error || 'Unknown extraction failure',\n  AiConfidence: d.ai_confidence || 0 } };\n"
+      },
+      "id": "i7-prep-fail",
+      "name": "Prepare Fail Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1460,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Failed Extractions"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "i7-sheets-fail",
+      "name": "Sheets: Log Failed",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1720,
+        160
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const d=$json;return{json:{Timestamp:new Date().toISOString(),EventKey:d.EventKey||'unknown',Workflow:'invoice-extraction',Status:'rejected_invalid_input',FileName:d.FileName||'',Reason:d.Reason||'unknown'}};"
+      },
+      "id": "i7-prep-invalid",
+      "name": "Prepare Invalid Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Invalid Invoices"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "i7-sheets-invalid",
+      "name": "Sheets: Log Invalid",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        960,
+        200
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Sample Invoices (Demo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sample Invoices (Demo)": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Input Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input Valid?": {
+      "main": [
+        [
+          {
+            "node": "Gemini: Extract Fields",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Invalid Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini: Extract Fields": {
+      "main": [
+        [
+          {
+            "node": "Parse Extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Extraction": {
+      "main": [
+        [
+          {
+            "node": "Extraction OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraction OK?": {
+      "main": [
+        [
+          {
+            "node": "Detect Duplicates & Anomalies",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Fail Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Duplicates & Anomalies": {
+      "main": [
+        [
+          {
+            "node": "Duplicate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Duplicate?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Dup Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Ledger Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Ledger Row": {
+      "main": [
+        [
+          {
+            "node": "Sheets: Append Ledger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sheets: Append Ledger": {
+      "main": [
+        [
+          {
+            "node": "Slack: #finance Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Dup Row": {
+      "main": [
+        [
+          {
+            "node": "Sheets: Log Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sheets: Log Duplicate": {
+      "main": [
+        [
+          {
+            "node": "Slack: Duplicate Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Fail Row": {
+      "main": [
+        [
+          {
+            "node": "Sheets: Log Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Invalid Row": {
+      "main": [
+        [
+          {
+            "node": "Sheets: Log Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
