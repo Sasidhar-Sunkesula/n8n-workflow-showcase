@@ -1,12 +1,6 @@
 [
   {
-    "updatedAt": "2026-07-26T22:19:52.372Z",
-    "createdAt": "2026-07-24T20:34:12.021Z",
-    "id": "ltLtMfRM3zQRJiSg",
-    "name": "02 · AI Lead Scoring & Approval-Safe Routing",
-    "description": "Authenticated lead-intake demo. Header authentication, request bounds, deterministic lead keys, strict model schema, durable audit, CRM upsert, and draft-only outreach. Keep inactive unless ingress rate limits are configured.",
-    "active": false,
-    "isArchived": false,
+    "name": "02 \u00b7 AI Lead Scoring & Approval-Safe Routing",
     "nodes": [
       {
         "parameters": {},
@@ -24,12 +18,7 @@
           "httpMethod": "POST",
           "path": "lead-scoring",
           "authentication": "headerAuth",
-          "responseMode": "lastNode",
-          "responseData": "firstEntryJson",
-          "options": {
-            "ignoreBots": true,
-            "responseCode": 202
-          }
+          "responseMode": "responseNode"
         },
         "id": "b2222222-2222-4222-8222-222222222222",
         "name": "Webhook (Lead Intake)",
@@ -42,8 +31,8 @@
         "webhookId": "lead-scoring-webhook-01",
         "credentials": {
           "httpHeaderAuth": {
-            "id": "PZk2a1HGek3kRQ7M",
-            "name": "Portfolio Intake Header Auth"
+            "id": "U96SWpix1pbuN0nz",
+            "name": "Portfolio Intake Header Auth (rotated)"
           }
         }
       },
@@ -72,7 +61,7 @@
               {
                 "id": "s4",
                 "name": "message",
-                "value": "Hi — we're a mid-size logistics firm and our ops team is drowning in manual order-tracking emails. We have budget approved this quarter and need to automate our support + dispatch pipeline. Can you show us what n8n can do? Looking to start within 2 weeks.",
+                "value": "Hi \u2014 we're a mid-size logistics firm and our ops team is drowning in manual order-tracking emails. We have budget approved this quarter and need to automate our support + dispatch pipeline. Can you show us what n8n can do? Looking to start within 2 weeks.",
                 "type": "string"
               }
             ]
@@ -207,7 +196,7 @@
             "mode": "id",
             "value": "C0BKU4DJ75F"
           },
-          "text": "=:fire: *HOT LEAD* — {{ $json.name }} @ {{ $json.company }}\n> {{ $json.reasoning }}\n*Email:* {{ $json.email }}\n*Signals:* {{ ($json.key_signals || []).join(', ') }}\n:email: Personalized outreach draft saved to Gmail.",
+          "text": "=:fire: *HOT LEAD* \u2014 {{ $json.name }} @ {{ $json.company }}\n> {{ $json.reasoning }}\n*Email:* {{ $json.email }}\n*Signals:* {{ ($json.key_signals || []).join(', ') }}\n:email: Personalized outreach draft saved to Gmail.",
           "otherOptions": {}
         },
         "id": "slack-alert-sales-hot-leads",
@@ -232,7 +221,7 @@
       {
         "parameters": {
           "resource": "draft",
-          "subject": "=[HOT] {{ $('Parse Score & Draft Outreach').item.json.company }} — personalized outreach",
+          "subject": "=[HOT] {{ $('Parse Score & Draft Outreach').item.json.company }} \u2014 personalized outreach",
           "emailType": "text",
           "message": "={{ $('Parse Score & Draft Outreach').item.json.outreach_draft }}",
           "options": {
@@ -337,7 +326,7 @@
         "typeVersion": 2,
         "parameters": {
           "mode": "runOnceForEachItem",
-          "jsCode": "const b=$json.body||$json,c=(v,n)=>String(v||'').trim().slice(0,n),name=c(b.name,120),email=c(b.email,254).toLowerCase(),company=c(b.company,160),message=c(b.message,4000),id=c(b.event_id||b.lead_id||b.id,160);const ok=name.length>1&&/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)&&company.length>1&&message.length>=10;const key='lead:'+require('crypto').createHash('sha256').update(id||[email,company,message].join('|')).digest('hex');return{json:ok?{name,email,company,message,LeadKey:key,received_at:new Date().toISOString(),valid:true}:{LeadKey:key,Timestamp:new Date().toISOString(),Workflow:'lead-scoring',Status:'rejected_invalid_input'}};"
+          "jsCode": "const h=s=>{let x=5381;for(let i=0;i<s.length;i++)x=((x<<5)+x+s.charCodeAt(i))>>>0;return x.toString(16).padStart(8,'0')};const b=$json.body||$json,c=(v,n)=>String(v||'').trim().slice(0,n),name=c(b.name,120),email=c(b.email,254).toLowerCase(),company=c(b.company,160),message=c(b.message,4000),id=c(b.event_id||b.lead_id||b.id,160);const ok=name.length>1&&/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)&&company.length>1&&message.length>=10;const key='lead:'+h(id||[email,company,message].join('|'));return{json:ok?{name,email,company,message,LeadKey:key,received_at:new Date().toISOString(),valid:true}:{LeadKey:key,Timestamp:new Date().toISOString(),Workflow:'lead-scoring',Status:'rejected_invalid_input'}};"
         },
         "id": "validate-lead",
         "position": [
@@ -384,7 +373,7 @@
         "typeVersion": 2,
         "parameters": {
           "mode": "runOnceForEachItem",
-          "jsCode": "const l=$input.first().json;return{json:{...l,Timestamp:new Date().toISOString(),EventKey:l.LeadKey,Workflow:'lead-scoring',Status:'accepted_for_scoring',ReplayPolicy:'upsert_by_lead_key'}};"
+          "jsCode": "const l=$json;return{json:{...l,Timestamp:new Date().toISOString(),EventKey:l.LeadKey,Workflow:'lead-scoring',Status:'accepted_for_scoring',ReplayPolicy:'upsert_by_lead_key'}};"
         },
         "id": "claim-lead",
         "position": [
@@ -550,6 +539,54 @@
         "retryOnFail": true,
         "maxTries": 3,
         "waitBetweenTries": 3000
+      },
+      {
+        "name": "Respond 200 OK",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [
+          1640,
+          190
+        ],
+        "id": "patch-02-respond-200",
+        "parameters": {
+          "respondWith": "json",
+          "responseCode": 200,
+          "responseBody": "={{ JSON.stringify({ status: \"processed\", lead_key: $(\"Validate & Normalize Lead\").item.json.LeadKey }) }}"
+        },
+        "notes": "Success response. Webhook is in responseNode mode; this is the terminal for the new-lead path."
+      },
+      {
+        "name": "Respond 400 Invalid",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [
+          380,
+          540
+        ],
+        "id": "patch-02-respond-400",
+        "parameters": {
+          "respondWith": "json",
+          "responseCode": 400,
+          "responseBody": "={{ JSON.stringify({ status: \"rejected\", reason: \"Invalid payload: name, email, company, and message (>=10 chars) required\" }) }}"
+        },
+        "notes": "Validation-failure response."
+      },
+      {
+        "name": "Respond 422 Unscorable",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [
+          980,
+          360
+        ],
+        "id": "patch-02-respond-422",
+        "parameters": {
+          "respondWith": "json",
+          "responseCode": 422,
+          "responseBody": "={{ JSON.stringify({ status: \"needs_human_review\", lead_key: $(\"Validate & Normalize Lead\").item.json.LeadKey }) }}"
+        },
+        "notes": "Returned when Gemini's score output fails schema validation."
       }
     ],
     "connections": {
@@ -752,15 +789,48 @@
       },
       "Sheets: Append Rejected Lead": {
         "main": [
-          []
+          [
+            {
+              "node": "Respond 400 Invalid",
+              "type": "main",
+              "index": 0
+            }
+          ]
         ]
       },
       "Sheets: Append Lead Review Queue": {
         "main": [
-          []
+          [
+            {
+              "node": "Respond 422 Unscorable",
+              "type": "main",
+              "index": 0
+            }
+          ]
         ]
       },
       "Sheets: Append Leads CRM": {
+        "main": [
+          [
+            {
+              "node": "Respond 200 OK",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Respond 200 OK": {
+        "main": [
+          []
+        ]
+      },
+      "Respond 400 Invalid": {
+        "main": [
+          []
+        ]
+      },
+      "Respond 422 Unscorable": {
         "main": [
           []
         ]
@@ -774,39 +844,6 @@
       "saveExecutionDataSuccess": "none",
       "saveExecutionDataError": "all"
     },
-    "staticData": null,
-    "meta": null,
-    "nodeGroups": [],
-    "pinData": null,
-    "versionId": "aaf46708-12df-4b4b-9203-00ca6db200c6",
-    "activeVersionId": null,
-    "versionCounter": 5,
-    "triggerCount": 1,
-    "sourceWorkflowId": null,
-    "tags": [],
-    "shared": [
-      {
-        "updatedAt": "2026-07-24T20:34:12.023Z",
-        "createdAt": "2026-07-24T20:34:12.023Z",
-        "role": "workflow:owner",
-        "workflowId": "ltLtMfRM3zQRJiSg",
-        "projectId": "Z8OBeEQoCVNlQZCj",
-        "project": {
-          "updatedAt": "2026-07-24T20:12:21.986Z",
-          "createdAt": "2026-07-24T20:11:25.841Z",
-          "id": "Z8OBeEQoCVNlQZCj",
-          "name": "Sasidhar Sunkesula <www.sasidharsunkesula579@gmail.com>",
-          "type": "personal",
-          "icon": null,
-          "description": null,
-          "customTelemetryTags": [],
-          "creatorId": "66c1d84e-4705-4037-8030-0906fa2af457"
-        }
-      }
-    ],
-    "versionMetadata": {
-      "name": null,
-      "description": null
-    }
+    "active": false
   }
 ]

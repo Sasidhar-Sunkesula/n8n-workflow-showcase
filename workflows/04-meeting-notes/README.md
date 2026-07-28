@@ -20,8 +20,8 @@ Manual Trigger (sample transcript) / Webhook
 ![execution](execution.png)
 
 ## Production Features
-- ✅ **Structured JSON extraction** — Gemini outputs strict JSON schema (action_items, summary, decisions, follow_ups). Validated by Code node before proceeding.
-- ✅ **Input validation + dedup** — transcript must be non-empty, > 50 words. Meeting ID checked against "Meeting Audit" sheet to prevent duplicate Notion pages on webhook retries.
+- ✅ **Structured JSON extraction** — Gemini outputs strict JSON schema (`actionItems`, `summary`, `keyDecisions`). Validated by Code node before proceeding.
+- ✅ **Input validation** — transcript must be non-empty, > 50 words, < 30K chars, with a valid meetingId. Malformed input throws before Gemini is called.
 - ✅ **Retry On Fail** — on all 5 external nodes (Gemini, Notion, Slack, Validate, Sheets)
 - ✅ **Structured audit logging** — every meeting logged: timestamp, meeting_id, action_item_count, notion_page_url, slack_posted
 - ✅ **Error handling** — attached to shared Error Handler workflow
@@ -40,5 +40,5 @@ n8n · Google Gemini (gemma-4-31b-it) · Notion · Slack · Google Sheets
 
 ## Results / Metrics
 - Sample transcript → real Notion page created: [Weekly Ops Sync Sample 2026-07-24](https://app.notion.com/p/Weekly-Ops-Sync-Sample-2026-07-24-3a83281a542b81fe8deee32638fbe5d8)
-- Slack recap posted to #ops-updates with summary + 3 action items + Notion link (verified execution #21)
+- Slack recap posted to #ops-updates with summary + 3 action items (verified execution #59)
 - Processing time: ~8s (Gemini extraction + Notion write + Slack post)

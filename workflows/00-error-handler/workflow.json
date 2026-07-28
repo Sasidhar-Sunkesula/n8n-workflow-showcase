@@ -1,12 +1,6 @@
 [
   {
-    "updatedAt": "2026-07-26T22:13:04.837Z",
-    "createdAt": "2026-07-26T22:13:04.837Z",
-    "id": "NtLq76OQQF3mYyh3",
-    "name": "00 · [PROD] Shared Error Handler & Alerting",
-    "description": "Internal reliability handler: redacts failure data, appends a durable DLQ event, and posts a connected Slack alert. Gmail fallback is an internal draft only and disabled until an on-call recipient is configured.",
-    "active": false,
-    "isArchived": false,
+    "name": "00 \u00b7 [PROD] Shared Error Handler & Alerting",
     "nodes": [
       {
         "parameters": {},
@@ -107,7 +101,10 @@
         },
         "retryOnFail": true,
         "maxTries": 3,
-        "waitBetweenTries": 3000
+        "waitBetweenTries": 3000,
+        "onError": "continueRegularOutput",
+        "notes": "Posts the alert to #automation-errors. On failure, continues to the IF so the Gmail fallback can fire.",
+        "webhookId": "fae8d887-44d0-4ebf-b7f8-7cd890ee4b01"
       },
       {
         "name": "Gmail: Create Internal Alert Draft",
@@ -125,8 +122,8 @@
         },
         "id": "gmail-fallback",
         "position": [
-          1160,
-          420
+          1180,
+          540
         ],
         "credentials": {
           "gmailOAuth2": {
@@ -134,10 +131,46 @@
             "name": "Gmail account"
           }
         },
-        "disabled": true,
+        "disabled": false,
         "retryOnFail": true,
         "maxTries": 3,
-        "waitBetweenTries": 3000
+        "waitBetweenTries": 3000,
+        "notes": "Fallback: invoked only when the Slack alert node throws. Requires N8N_ONCALL_EMAIL env or a real recipient to actually send; otherwise creates a draft.",
+        "webhookId": "c2f9be01-8011-4b13-aa42-6c08d5ae6408"
+      },
+      {
+        "name": "Slack Alert Sent?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1100,
+          300
+        ],
+        "id": "patch-00-slack-if",
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ !($json.error || $json.message) }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "notes": "TRUE (output 0) = Slack sent OK \u2192 end. FALSE (output 1) = Slack failed \u2192 Gmail fallback draft."
       }
     ],
     "connections": {
@@ -176,6 +209,29 @@
       },
       "Slack: Alert Automation Errors": {
         "main": [
+          [
+            {
+              "node": "Slack Alert Sent?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Slack Alert Sent?": {
+        "main": [
+          [],
+          [
+            {
+              "node": "Gmail: Create Internal Alert Draft",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gmail: Create Internal Alert Draft": {
+        "main": [
           []
         ]
       }
@@ -188,39 +244,6 @@
       "saveExecutionDataSuccess": "none",
       "saveExecutionDataError": "all"
     },
-    "staticData": null,
-    "meta": null,
-    "nodeGroups": [],
-    "pinData": null,
-    "versionId": "fa1f4bea-db42-4f22-b6f3-3e2efa78c15d",
-    "activeVersionId": null,
-    "versionCounter": 2,
-    "triggerCount": 0,
-    "sourceWorkflowId": null,
-    "tags": [],
-    "shared": [
-      {
-        "updatedAt": "2026-07-26T22:13:04.839Z",
-        "createdAt": "2026-07-26T22:13:04.839Z",
-        "role": "workflow:owner",
-        "workflowId": "NtLq76OQQF3mYyh3",
-        "projectId": "Z8OBeEQoCVNlQZCj",
-        "project": {
-          "updatedAt": "2026-07-24T20:12:21.986Z",
-          "createdAt": "2026-07-24T20:11:25.841Z",
-          "id": "Z8OBeEQoCVNlQZCj",
-          "name": "Sasidhar Sunkesula <www.sasidharsunkesula579@gmail.com>",
-          "type": "personal",
-          "icon": null,
-          "description": null,
-          "customTelemetryTags": [],
-          "creatorId": "66c1d84e-4705-4037-8030-0906fa2af457"
-        }
-      }
-    ],
-    "versionMetadata": {
-      "name": null,
-      "description": null
-    }
+    "active": false
   }
 ]

@@ -1,22 +1,13 @@
 [
   {
-    "updatedAt": "2026-07-26T23:05:22.368Z",
-    "createdAt": "2026-07-26T21:57:17.816Z",
-    "id": "FZ6uqJEpsatUC2by",
-    "name": "03 · Document Q&A Search Bot (Knowledge)",
-    "description": "Credential-backed Q&A demo. Authenticated questions are bounded, retrieved deterministically from the local demo corpus, threshold-gated, answered through the existing n8n Gemini credential, and logged with a hashed question key.",
-    "active": false,
-    "isArchived": false,
+    "name": "03 \u00b7 Document Q&A Search Bot (Knowledge)",
     "nodes": [
       {
         "parameters": {
           "httpMethod": "POST",
           "path": "doc-qa",
-          "authentication": "headerAuth",
           "responseMode": "responseNode",
-          "options": {
-            "ignoreBots": true
-          }
+          "authentication": "headerAuth"
         },
         "id": "webhook",
         "name": "Ask Question (Webhook)",
@@ -26,11 +17,11 @@
           200,
           360
         ],
-        "webhookId": "doc-qa-search-bot",
+        "webhookId": "b43853b9-d180-4b55-b33a-28848d672173",
         "credentials": {
           "httpHeaderAuth": {
-            "id": "PZk2a1HGek3kRQ7M",
-            "name": "Portfolio Intake Header Auth"
+            "id": "U96SWpix1pbuN0nz",
+            "name": "Portfolio Intake Header Auth (rotated)"
           }
         }
       },
@@ -191,7 +182,7 @@
         "typeVersion": 2,
         "parameters": {
           "mode": "runOnceForEachItem",
-          "jsCode": "const b=$json.body||$json,q=String(b.question||'').trim().replace(/\\s+/g,' ');if(q.length<5||q.length>500)throw Error('Invalid question length');return{json:{question:q,QuestionKey:require('crypto').createHash('sha256').update(q).digest('hex')}};"
+          "jsCode": "const b=$json.body||$json,q=String(b.question||'').trim().replace(/\\s+/g,' ');const h=s=>{let x=5381;for(let i=0;i<s.length;i++)x=((x<<5)+x+s.charCodeAt(i))>>>0;return x.toString(16).padStart(8,'0')};if(q.length<5||q.length>500)throw Error('Invalid question length');return{json:{question:q,QuestionKey:h(q)}};"
         },
         "id": "validate-question",
         "position": [
@@ -400,39 +391,6 @@
       "saveExecutionDataSuccess": "none",
       "saveExecutionDataError": "all"
     },
-    "staticData": null,
-    "meta": null,
-    "nodeGroups": [],
-    "pinData": null,
-    "versionId": "ab2cb64e-de53-4e69-a39e-01fb59e93f8d",
-    "activeVersionId": null,
-    "versionCounter": 6,
-    "triggerCount": 0,
-    "sourceWorkflowId": null,
-    "tags": [],
-    "shared": [
-      {
-        "updatedAt": "2026-07-26T21:57:17.820Z",
-        "createdAt": "2026-07-26T21:57:17.820Z",
-        "role": "workflow:owner",
-        "workflowId": "FZ6uqJEpsatUC2by",
-        "projectId": "Z8OBeEQoCVNlQZCj",
-        "project": {
-          "updatedAt": "2026-07-24T20:12:21.986Z",
-          "createdAt": "2026-07-24T20:11:25.841Z",
-          "id": "Z8OBeEQoCVNlQZCj",
-          "name": "Sasidhar Sunkesula <www.sasidharsunkesula579@gmail.com>",
-          "type": "personal",
-          "icon": null,
-          "description": null,
-          "customTelemetryTags": [],
-          "creatorId": "66c1d84e-4705-4037-8030-0906fa2af457"
-        }
-      }
-    ],
-    "versionMetadata": {
-      "name": null,
-      "description": null
-    }
+    "active": false
   }
 ]

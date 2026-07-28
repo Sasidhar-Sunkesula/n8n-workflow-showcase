@@ -7,7 +7,7 @@ Sales teams lose revenue when leads sit unqualified in a form submission inbox. 
 ```
 Webhook (POST /lead-scoring) / Manual Trigger
   → Validate & Normalize Lead (schema: name, email, company required)
-  → IF invalid → Sheets: Append Rejected Lead + respond 400
+  → IF invalid → Sheets: Append Rejected Lead + Respond 400
   → Gemini: Score Lead (HOT / WARM / COLD + BANT reasoning)
   → Parse Score & Draft Outreach
   → IF score schema invalid → Sheets: Append Lead Review Queue
@@ -21,8 +21,8 @@ Webhook (POST /lead-scoring) / Manual Trigger
 
 ## Production Features
 - ✅ **Webhook authentication** — Header Auth (X-API-Key) on the webhook endpoint. Documented in setup.
-- ✅ **Idempotency guard** — lead_id / event_id checked against "Lead Audit" sheet. Duplicate webhooks → 200 response + stop. Prevents double-scoring.
-- ✅ **Input validation** — Code node validates payload schema (required: email, name, company). Malformed → 400 + logged to "Rejected Lead" sheet. Bad data never reaches Gemini.
+- ✅ **Idempotency via audit log** — every lead appended to "Lead Audit" sheet with a deterministic EventKey (SHA of lead identity). Downstream consumers can dedup on EventKey. (Hard pre-check lookup removed — n8n Sheets `read` returns empty on no-match, breaking the IF gate.)
+- ✅ **Input validation** — Code node validates payload schema (required: email, name, company, message ≥10 chars). Malformed → HTTP 400 + logged to "Rejected Lead" sheet. Bad data never reaches Gemini.
 - ✅ **Score schema validation** — IF Gemini returns malformed score → route to "Lead Review Queue" sheet for human review instead of crashing
 - ✅ **Retry On Fail** — on all 7 external nodes (Gemini, Slack, Gmail, Sheets ×4)
 - ✅ **Structured audit logging** — every lead logged: timestamp, lead_id, score, reasoning, action_taken, outreach_draft

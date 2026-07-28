@@ -6,9 +6,9 @@ Customers repeatedly ask the same questions (hours, password reset, pricing, ref
 ## Solution Architecture
 ```
 Webhook (POST /doc-qa) / Manual Trigger
-  → Validate Question (non-empty, > 3 words)
+  → Validate Question (5–500 chars)
   → FAQ Chunks (5 knowledge-base documents)
-  → Retrieve Best Chunk (token-overlap + bigram-boost scoring)
+  → Retrieve Best Chunk (unigram token-overlap scoring)
   → Retrieval Confidence Gate (IF matchScore < threshold → No-Answer Response)
   → Gemini (gemma-4-31b-it): grounded answer using ONLY retrieved context
   → Format Answer (question, answer, source, matchScore)
@@ -22,7 +22,7 @@ Webhook (POST /doc-qa) / Manual Trigger
 - ✅ **Grounded answering** — Gemini is instructed to answer using ONLY the retrieved document context. If the answer isn't in the context, it replies "I'm sorry, I don't have that information" instead of hallucinating.
 - ✅ **Retrieval confidence gate** — IF no chunk scores above threshold → returns a polite "I don't have that information" response. Prevents hallucination on out-of-scope questions.
 - ✅ **Source citation** — every answer includes the source category (hours/account/pricing/billing/data) and match score
-- ✅ **Input validation** — question must be non-empty and > 3 words. Garbage input rejected early.
+- ✅ **Input validation** — question must be 5–500 characters. Garbage input rejected early.
 - ✅ **Query logging** — every question + answer + source + score → appended to "DocQA Log" sheet. Enables: usage analytics, quality review, identifying missing docs.
 - ✅ **Retry On Fail** — on Gemini and Sheets nodes
 - ✅ **Error handling** — attached to shared Error Handler workflow
