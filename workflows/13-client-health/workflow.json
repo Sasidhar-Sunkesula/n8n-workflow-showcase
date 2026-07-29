@@ -1,0 +1,537 @@
+{
+  "name": "13 · Client Health Monitor (Churn Prevention)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 13 · Client Health Monitor (Churn Prevention)\n**What it does:** Daily, scans client engagement data (login frequency, feature usage, support tickets, payment status) → AI computes a health score (0-100) → flags at-risk clients → alerts the success team on Slack with recommended interventions.\n\n**Why it matters:** SaaS companies lose most churned customers in the first 30 days. Catching at-risk clients early is 10x cheaper than acquiring new ones. **Sell at:** $600-1000 setup + $200-350/mo.",
+        "height": 130,
+        "width": 940,
+        "color": 4
+      },
+      "id": "s13-title",
+      "name": "Sticky: Title",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Input\n**Schedule:** daily at 8 AM.\n**Demo:** manual trigger with sample client data.\n\nEach client: name, company, plan, last login, feature usage %, support tickets this month, payment status.\nValidate: company name, plan present.",
+        "height": 200,
+        "width": 300,
+        "color": 5
+      },
+      "id": "s13-input",
+      "name": "Sticky: Input",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### AI Health Score\nGemini computes a health score (0-100) based on:\n- Login frequency (days since last login)\n- Feature usage % (are they using what they pay for?)\n- Support ticket volume (rising = frustration)\n- Payment status (late = risk)\n\nAlso generates:\n- Risk level (healthy / at-risk / critical)\n- Recommended intervention\n- Confidence score",
+        "height": 220,
+        "width": 360,
+        "color": 5
+      },
+      "id": "s13-ai",
+      "name": "Sticky: AI Health Score",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Output\n- Compute health score for each client\n- Flag at-risk clients (score < 60)\n- Slack alert with health score + recommended intervention\n- Log to Client Health sheet\n\nThe success team gets a daily Slack message: '3 clients are at risk today. Here's what to do.'",
+        "height": 200,
+        "width": 340,
+        "color": 5
+      },
+      "id": "s13-output",
+      "name": "Sticky: Output",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1180,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "s13-schedule",
+      "name": "Schedule: Daily 8AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -320,
+        20
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "s13-manual",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -320,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\n// Demo client data. PRODUCTION: replace with Sheets read of \"Clients\" tab or CRM API.\nconst clients = [\n  { name: \"Sarah Mitchell\", company: \"Brightwave Coffee\", plan: \"Growth\", lastLoginDaysAgo: 2, featureUsagePct: 78, supportTicketsThisMonth: 1, paymentStatus: \"current\" },\n  { name: \"Marcus Chen\", company: \"FitLife Studios\", plan: \"Starter\", lastLoginDaysAgo: 12, featureUsagePct: 22, supportTicketsThisMonth: 4, paymentStatus: \"late\" },\n  { name: \"Diana Torres\", company: \"GreenScape LLC\", plan: \"Enterprise\", lastLoginDaysAgo: 5, featureUsagePct: 65, supportTicketsThisMonth: 2, paymentStatus: \"current\" }\n];\nreturn clients.map(c => ({ json: { ...c, EventKey: \"health:\" + c.company + \":\" + new Date().toISOString().slice(0,10) } }));\n"
+      },
+      "id": "s13-clients",
+      "name": "Client Data (Demo)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -60,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst c = $json;\nconst ok = c.company && String(c.company).length >= 2 && c.plan;\nif (!ok) return { json: { Timestamp: new Date().toISOString(), EventKey: c.EventKey || 'unknown',\n  Workflow: 'client-health', Status: 'rejected_invalid_client', Reason: 'bad company/plan' } };\nreturn { json: { ...c, input_valid: true } };\n"
+      },
+      "id": "s13-validate",
+      "name": "Validate Client",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.input_valid === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "s13-if-valid",
+      "name": "Client Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        460,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "models/gemma-4-31b-it"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a customer success analyst. Compute a health score (0-100) for this SaaS client and recommend an intervention.\n\nCLIENT DATA:\n- Name: {{ $json.name }} at {{ $json.company }}\n- Plan: {{ $json.plan }}\n- Days since last login: {{ $json.lastLoginDaysAgo }}\n- Feature usage: {{ $json.featureUsagePct }}%\n- Support tickets this month: {{ $json.supportTicketsThisMonth }}\n- Payment status: {{ $json.paymentStatus }}\n\nScoring guidelines:\n- Login frequency: <3 days = healthy, 3-7 = warning, >7 = risk\n- Feature usage: >70% = healthy, 40-70% = warning, <40% = risk\n- Support tickets: 0-1 = healthy, 2-3 = warning, >3 = risk\n- Payment: current = healthy, late = critical risk\n\nGenerate exactly this JSON (no markdown fences):\n{\n  \"healthScore\": <0-100>,\n  \"riskLevel\": \"<healthy|at-risk|critical>\",\n  \"keyRiskFactors\": [\"<factor 1>\", \"<factor 2>\"],\n  \"recommendedIntervention\": \"<specific action for the success team>\",\n  \"confidence\": <0.0-1.0>\n}\nYour ENTIRE response must be that single JSON object."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "s13-gemini",
+      "name": "Gemini: Compute Health Score",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        -60
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "B8oepyrWrBGFl6Ud",
+          "name": "Google Gemini (portfolio)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst raw = $json.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('') ?? $json.text ?? '';\nconst cleaned = raw.replace(/```json/gi,'').replace(/```/g,'').trim();\nlet data = null;\nfor (const c of (cleaned.match(/\\{[\\s\\S]*\\}/g) || []).reverse()) {\n  try { const p = JSON.parse(c); if (p && typeof p.healthScore === 'number') { data = p; break; } } catch(e){}\n}\nconst client = $('Validate Client').item.json;\nif (!data) return { json: { ...client, parse_ok: false, error: 'AI output unparseable',\n  healthScore: 50, riskLevel: 'at-risk', keyRiskFactors: ['unknown'], recommendedIntervention: 'Manual review needed', confidence: 0.5 } };\nconst confidence = typeof data.confidence === 'number' ? data.confidence : 0.7;\nreturn { json: { ...client, ...data, confidence, parse_ok: true } };\n"
+      },
+      "id": "s13-parse",
+      "name": "Parse Health Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ ['at-risk','critical'].includes($json.riskLevel) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "s13-if-risk",
+      "name": "At Risk?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1240,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst c = $json;\nreturn { json: {\n  Timestamp: new Date().toISOString(),\n  EventKey: c.EventKey,\n  Workflow: 'client-health',\n  Status: 'client_at_risk',\n  Name: c.name,\n  Company: c.company,\n  Plan: c.plan,\n  HealthScore: c.healthScore,\n  RiskLevel: c.riskLevel,\n  KeyRiskFactors: (c.keyRiskFactors || []).join('; '),\n  RecommendedIntervention: c.recommendedIntervention,\n  LastLoginDaysAgo: c.lastLoginDaysAgo,\n  FeatureUsagePct: c.featureUsagePct,\n  SupportTickets: c.supportTicketsThisMonth,\n  PaymentStatus: c.paymentStatus,\n  Confidence: c.confidence,\n  ReplayPolicy: 'idempotent_skip'\n}};\n"
+      },
+      "id": "s13-build",
+      "name": "Build Alert Item",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Client Health"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "s13-sheets",
+      "name": "Sheets: Log Health",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1760,
+        -140
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "C0BKVT980BE"
+        },
+        "text": ":warning: *Client At Risk*\n\n*Client:* {{ $json.Name }} ({{ $json.Company }})\n*Plan:* {{ $json.Plan }} | *Health Score:* {{ $json.HealthScore }}/100 | *Risk:* {{ $json.RiskLevel }}\n*Key risks:* {{ $json.KeyRiskFactors }}\n*Last login:* {{ $json.LastLoginDaysAgo }} days ago | *Feature usage:* {{ $json.FeatureUsagePct }}% | *Tickets:* {{ $json.SupportTickets }} | *Payment:* {{ $json.PaymentStatus }}\n\n*Recommended intervention:* {{ $json.RecommendedIntervention }}\n\n:phone: Reach out today. Confidence: {{ $json.Confidence }}",
+        "otherOptions": {}
+      },
+      "id": "s13-slack",
+      "name": "Slack: At-Risk Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        2020,
+        -140
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "0LO7Ag4PE1NaZFpO",
+          "name": "Slack account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "s13-slack-risk-001"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Client Health"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "s13-log-invalid",
+      "name": "Sheets: Log Invalid",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        720,
+        260
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Client Health"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "s13-log-fail",
+      "name": "Sheets: Log Parse Fail",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1240,
+        160
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "Schedule: Daily 8AM": {
+      "main": [
+        [
+          {
+            "node": "Client Data (Demo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Client Data (Demo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Client Data (Demo)": {
+      "main": [
+        [
+          {
+            "node": "Validate Client",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Client": {
+      "main": [
+        [
+          {
+            "node": "Client Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Client Valid?": {
+      "main": [
+        [
+          {
+            "node": "Gemini: Compute Health Score",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sheets: Log Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini: Compute Health Score": {
+      "main": [
+        [
+          {
+            "node": "Parse Health Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Health Score": {
+      "main": [
+        [
+          {
+            "node": "At Risk?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "At Risk?": {
+      "main": [
+        [
+          {
+            "node": "Build Alert Item",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Build Alert Item": {
+      "main": [
+        [
+          {
+            "node": "Sheets: Log Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sheets: Log Health": {
+      "main": [
+        [
+          {
+            "node": "Slack: At-Risk Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
