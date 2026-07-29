@@ -2,3 +2,15 @@
 n8n_api_key.txt
 gemini_api_key.txt
 n8n.log
+
+# Credentials & secrets — never commit
+*credentials*
+*secret*
+*password*
+*.env
+.env.*
+ACCOUNTS_AND_CREDENTIALS*
+
+# OS junk
+.DS_Store
+Thumbs.db
