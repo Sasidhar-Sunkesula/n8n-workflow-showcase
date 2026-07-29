@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Automation ROI Calculator — Sasidhar Sunkesula</title>
+<meta name="description" content="Calculate how much time and money you'd save by automating your manual processes with n8n. Free ROI calculator.">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a3a;
+    --text: #e4e4ef;
+    --text-dim: #8888a0;
+    --accent: #6c5ce7;
+    --accent-light: #a29bfe;
+    --green: #00b894;
+    --orange: #fdcb6e;
+    --red: #e17055;
+    --radius: 12px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  .container { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+  .hero { padding: 60px 0 40px; text-align: center; border-bottom: 1px solid var(--border); }
+  .hero h1 {
+    font-size: 36px; font-weight: 800; letter-spacing: -1px; margin-bottom: 12px;
+    background: linear-gradient(135deg, #fff 0%, var(--accent-light) 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .hero p { font-size: 17px; color: var(--text-dim); max-width: 560px; margin: 0 auto; }
+  .calc { padding: 40px 0; }
+  .calc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .calc-inputs { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; }
+  .calc-results { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; }
+  .field { margin-bottom: 20px; }
+  .field label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+  .field .hint { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+  .field input, .field select {
+    width: 100%; padding: 10px 12px; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 15px;
+  }
+  .field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
+  .result-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .result-row:last-child { border-bottom: none; }
+  .result-label { font-size: 14px; color: var(--text-dim); }
+  .result-value { font-size: 20px; font-weight: 800; color: var(--green); }
+  .result-value.highlight { font-size: 28px; color: var(--accent-light); }
+  .cta { padding: 40px 0; text-align: center; border-top: 1px solid var(--border); }
+  .cta h2 { font-size: 24px; font-weight: 700; margin-bottom: 12px; }
+  .cta p { color: var(--text-dim); margin-bottom: 20px; }
+  .btn { display: inline-block; padding: 12px 28px; border-radius: 8px; font-size: 15px; font-weight: 600; text-decoration: none; transition: all 0.2s; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #5a4bd1; transform: translateY(-1px); }
+  .footer { padding: 24px 0; text-align: center; font-size: 13px; color: var(--text-dim); border-top: 1px solid var(--border); }
+  .footer a { color: var(--accent-light); text-decoration: none; }
+  @media (max-width: 700px) { .calc-grid { grid-template-columns: 1fr; } .hero h1 { font-size: 26px; } }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <div class="hero">
+    <h1>Automation ROI Calculator</h1>
+    <p>Find out how much time and money you'd save by automating your manual processes. Takes 30 seconds.</p>
+  </div>
+
+  <div class="calc">
+    <div class="calc-grid">
+      <div class="calc-inputs">
+        <div class="field">
+          <label>What process do you want to automate?</label>
+          <select id="process" onchange="calculate()">
+            <option value="reporting">Client reporting (marketing agency)</option>
+            <option value="onboarding">Customer onboarding (SaaS)</option>
+            <option value="invoices">Invoice processing (finance)</option>
+            <option value="leads">Lead capture & follow-up (sales)</option>
+            <option value="custom">Other manual process</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>How many hours/week does your team spend on this?</label>
+          <input type="number" id="hours" value="8" min="1" max="80" oninput="calculate()">
+          <div class="hint">Include all the people involved. E.g., 3 people × 3 hours = 9 hours.</div>
+        </div>
+        <div class="field">
+          <label>What's your team's hourly rate?</label>
+          <input type="number" id="rate" value="30" min="5" max="500" oninput="calculate()">
+          <div class="hint">Fully-loaded cost per hour (salary + overhead).</div>
+        </div>
+        <div class="field">
+          <label>How many [clients/customers/invoices] per month?</label>
+          <input type="number" id="volume" value="15" min="1" max="1000" oninput="calculate()">
+          <div class="hint">Higher volume = bigger savings from automation.</div>
+        </div>
+      </div>
+
+      <div class="calc-results">
+        <h3 style="font-size:16px; margin-bottom:16px; color:var(--text-dim);">Your estimated savings</h3>
+        <div class="result-row">
+          <span class="result-label">Hours saved / month</span>
+          <span class="result-value" id="hoursSaved">32 hrs</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Labor cost saved / month</span>
+          <span class="result-value" id="laborSaved">$960</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Labor cost saved / year</span>
+          <span class="result-value" id="laborSavedYear">$11,520</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Automation cost (est.)</span>
+          <span class="result-value" style="color:var(--orange)" id="autoCost">$250/mo</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Net savings / month</span>
+          <span class="result-value highlight" id="netSavings">$710</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Payback period</span>
+          <span class="result-value highlight" id="payback">1.1 months</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cta">
+    <h2>Ready to automate this?</h2>
+    <p>I build production n8n workflows that save teams 5-40 hours/week. Let's talk about your process.</p>
+    <a href="mailto:www.sasidharsunkesula579@gmail.com?subject=Automation%20ROI%20Inquiry" class="btn btn-primary">Get a Free Consultation →</a>
+  </div>
+
+  <div class="footer">
+    <p>Sasidhar Sunkesula · Full-Stack Developer & Automation Engineer</p>
+    <p style="margin-top:8px;">
+      <a href="https://github.com/Sasidhar-Sunkesula/n8n-workflow-showcase">GitHub</a> ·
+      <a href="https://linkedin.com/in/sasidhar-sunkesula">LinkedIn</a> ·
+      <a href="https://n8n-workflow-showcase-five.vercel.app/">Portfolio</a>
+    </p>
+  </div>
+
+</div>
+
+<script>
+function calculate() {
+  const process = document.getElementById('process').value;
+  const hours = parseFloat(document.getElementById('hours').value) || 0;
+  const rate = parseFloat(document.getElementById('rate').value) || 0;
+  const volume = parseFloat(document.getElementById('volume').value) || 0;
+
+  // Hours saved per month (assume automation saves ~90% of manual time)
+  const hoursPerMonth = hours * 4.33;
+  const hoursSaved = Math.round(hoursPerMonth * 0.9);
+
+  // Labor cost saved
+  const laborSaved = Math.round(hoursSaved * rate);
+  const laborSavedYear = laborSaved * 12;
+
+  // Automation cost estimate (setup amortized + monthly retainer)
+  const setupCosts = { reporting: 650, onboarding: 800, invoices: 950, leads: 800, custom: 850 };
+  const monthlyCosts = { reporting: 250, onboarding: 275, invoices: 325, leads: 275, custom: 275 };
+  const setup = setupCosts[process] || 850;
+  const monthly = monthlyCosts[process] || 275;
+  const setupAmortized = Math.round(setup / 12);
+  const autoCost = monthly + setupAmortized;
+
+  // Net savings
+  const netSavings = laborSaved - autoCost;
+  const payback = netSavings > 0 ? (setup / netSavings).toFixed(1) : 'N/A';
+
+  document.getElementById('hoursSaved').textContent = hoursSaved + ' hrs';
+  document.getElementById('laborSaved').textContent = '$' + laborSaved.toLocaleString();
+  document.getElementById('laborSavedYear').textContent = '$' + laborSavedYear.toLocaleString();
+  document.getElementById('autoCost').textContent = '$' + autoCost + '/mo';
+  document.getElementById('netSavings').textContent = '$' + netSavings.toLocaleString();
+  document.getElementById('netSavings').style.color = netSavings > 0 ? 'var(--accent-light)' : 'var(--red)';
+  document.getElementById('payback').textContent = payback + ' months';
+}
+
+calculate();
+</script>
+
+</body>
+</html>
