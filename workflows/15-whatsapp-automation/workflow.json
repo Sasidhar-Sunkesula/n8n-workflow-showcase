@@ -1,0 +1,630 @@
+{
+  "name": "15 · WhatsApp Business Auto-Reply + Lead Capture (Sales)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 15 · WhatsApp Business Auto-Reply + Lead Capture (Sales)\n**What it does:** Receives WhatsApp messages via webhook → AI classifies intent (lead/support/spam/general) → captures lead data → logs to CRM (Sheets) → alerts sales team on Slack → sends auto-reply.\n\n**Why it sells:** WhatsApp is THE business channel in India, LatAm, SEA. Every SMB needs auto-replies + lead capture. **Sell at:** $500-900 setup + $150-300/mo.\n\n**Setup:** Add your WhatsApp Business API credential (Header Auth: Bearer token) to the 'Send WhatsApp Reply' node. The lead capture + CRM logging works even without it configured.",
+        "height": 130,
+        "width": 940,
+        "color": 4
+      },
+      "id": "s15-title",
+      "name": "Sticky: Title",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        -280
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Input\n**Webhook** receives WhatsApp message:\n- from (phone number)\n- message text\n- timestamp\n- profile name (if available)\n\n**Demo:** manual trigger with sample messages.\nValidate: phone format, message not empty.",
+        "height": 200,
+        "width": 300,
+        "color": 5
+      },
+      "id": "s15-input",
+      "name": "Sticky: Input",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### AI Classification\nGemini classifies each message:\n- Intent: lead / support / spam / general\n- Suggested reply (contextual, helpful)\n- Lead data extraction (name, company, need) if intent=lead\n- Confidence score\n\nConfidence gate: low-confidence → flag for human review.",
+        "height": 220,
+        "width": 360,
+        "color": 5
+      },
+      "id": "s15-ai",
+      "name": "Sticky: AI Classification",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Output (lead capture is the core value)\n- Log ALL messages to audit trail (Sheets)\n- If lead: capture data to CRM (Sheets) + alert sales on Slack\n- Send auto-reply via WhatsApp API (side-branch, non-blocking)\n\nThe WhatsApp send is a separate branch so lead capture succeeds even if the send credential isn't configured yet.",
+        "height": 220,
+        "width": 340,
+        "color": 5
+      },
+      "id": "s15-output",
+      "name": "Sticky: Output",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1180,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-message",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "s15-webhook",
+      "name": "Webhook: WhatsApp Message",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        20
+      ],
+      "webhookId": "s15-webhook-whatsapp-001"
+    },
+    {
+      "parameters": {},
+      "id": "s15-manual",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -320,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\n// Demo WhatsApp messages. PRODUCTION: replace with webhook body from WhatsApp Business API.\nconst messages = [\n  { from: \"+919876543210\", message: \"Hi, I'm interested in your automation services. We're a marketing agency with 20 clients. Can you help us automate client reporting?\", timestamp: new Date().toISOString(), profileName: \"Rahul Sharma\" },\n  { from: \"+919876543211\", message: \"My workflow is broken. The Gmail node keeps failing with auth errors. Help!\", timestamp: new Date().toISOString(), profileName: \"Priya Patel\" },\n  { from: \"+919876543212\", message: \"Buy cheap followers now! Click here: spam.link\", timestamp: new Date().toISOString(), profileName: \"Spam Bot\" }\n];\nreturn messages.map(m => ({ json: { ...m, EventKey: \"whatsapp:\" + m.from + \":\" + m.timestamp } }));\n"
+      },
+      "id": "s15-messages",
+      "name": "WhatsApp Messages (Demo)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -60,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst m = $json;\nconst phoneOk = /^\\+?[1-9]\\d{1,14}$/.test(String(m.from || '').replace(/[\\s-]/g, ''));\nconst ok = phoneOk && m.message && String(m.message).trim().length > 0;\nif (!ok) return { json: { Timestamp: new Date().toISOString(), EventKey: m.EventKey || 'unknown',\n  Workflow: 'whatsapp-automation', Status: 'rejected_invalid_message', Reason: 'bad phone or empty message' } };\nreturn { json: { ...m, input_valid: true } };\n"
+      },
+      "id": "s15-validate",
+      "name": "Validate Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.input_valid === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "s15-if-valid",
+      "name": "Message Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        460,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "models/gemma-4-31b-it"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a WhatsApp business assistant. Classify this incoming message and generate an appropriate reply.\n\nMESSAGE:\n- From: {{ $json.profileName || $json.from }}\n- Text: {{ $json.message }}\n\nGenerate exactly this JSON (no markdown fences):\n{\n  \"intent\": \"<lead|support|spam|general>\",\n  \"reply\": \"<helpful, contextual reply in 1-3 sentences>\",\n  \"leadData\": {\n    \"name\": \"<extracted name or null>\",\n    \"company\": \"<extracted company or null>\",\n    \"need\": \"<what they need, 1 sentence>\"\n  },\n  \"confidence\": <0.0-1.0>\n}\n\nClassification guidelines:\n- lead: expressing interest in services, asking about pricing, mentioning business needs\n- support: asking for help with a technical issue, reporting a bug\n- spam: unsolicited, promotional, suspicious links\n- general: greetings, small talk, unclear intent\n\nYour ENTIRE response must be that single JSON object."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "s15-gemini",
+      "name": "Gemini: Classify Message",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        -40
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "B8oepyrWrBGFl6Ud",
+          "name": "Google Gemini (portfolio)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst raw = $json.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('') ?? $json.text ?? '';\nconst cleaned = raw.replace(/```json/gi,'').replace(/```/g,'').trim();\nlet data = null;\nfor (const c of (cleaned.match(/\\{[\\s\\S]*\\}/g) || []).reverse()) {\n  try { const p = JSON.parse(c); if (p && p.intent) { data = p; break; } } catch(e){}\n}\nconst msg = $('Validate Message').item.json;\nif (!data) return { json: { ...msg, parse_ok: false, error: 'AI output unparseable',\n  intent: 'general', reply: 'Thanks for your message! We\\'ll get back to you soon.', leadData: {}, confidence: 0.5 } };\nconst confidence = typeof data.confidence === 'number' ? data.confidence : 0.7;\nreturn { json: { ...msg, ...data, confidence, parse_ok: true } };\n"
+      },
+      "id": "s15-parse",
+      "name": "Parse Classification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst m = $json;\nconst ld = m.leadData || {};\nreturn { json: {\n  Timestamp: new Date().toISOString(),\n  EventKey: m.EventKey,\n  Workflow: 'whatsapp-automation',\n  From: m.from,\n  ProfileName: m.profileName || ld.name || 'Unknown',\n  Message: m.message,\n  Intent: m.intent,\n  Reply: m.reply,\n  Company: ld.company || 'Unknown',\n  Need: ld.need || (m.intent === 'lead' ? m.message.slice(0, 200) : ''),\n  Confidence: m.confidence,\n  Status: 'classified',\n  ReplayPolicy: 'idempotent_skip'\n}};\n"
+      },
+      "id": "s15-build",
+      "name": "Build Processed Item",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1240,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "WhatsApp Messages"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "s15-sheets-audit",
+      "name": "Sheets: Log Message",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1500,
+        -40
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.Intent }}",
+              "rightValue": "lead",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "s15-if-lead",
+      "name": "Is Lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst m = $json;\nreturn { json: {\n  Timestamp: m.Timestamp,\n  EventKey: m.EventKey,\n  Workflow: 'whatsapp-automation',\n  Status: 'lead_captured',\n  From: m.From,\n  ProfileName: m.ProfileName,\n  Company: m.Company,\n  Need: m.Need,\n  Intent: m.Intent,\n  Confidence: m.Confidence,\n  ReplayPolicy: 'idempotent_skip'\n}};\n"
+      },
+      "id": "s15-build-lead",
+      "name": "Build Lead Item",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "WhatsApp Leads"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "s15-sheets-lead",
+      "name": "Sheets: Log Lead",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2280,
+        -140
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "C0BKVT980BE"
+        },
+        "text": ":rocket: *New WhatsApp Lead*\n\n*From:* {{ $json.ProfileName }} ({{ $json.From }})\n*Company:* {{ $json.Company }}\n*Need:* {{ $json.Need }}\n*Confidence:* {{ $json.Confidence }}\n\n:phone: Follow up ASAP. Lead captured from WhatsApp auto-reply workflow.",
+        "otherOptions": {}
+      },
+      "id": "s15-slack-lead",
+      "name": "Slack: Lead Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        2540,
+        -140
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "0LO7Ag4PE1NaZFpO",
+          "name": "Slack account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "s15-slack-lead-001"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/PHONE_NUMBER_ID/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.From, type: 'text', text: { body: $json.Reply } }) }}",
+        "options": {}
+      },
+      "id": "s15-send-reply",
+      "name": "Send WhatsApp Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2020,
+        120
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, status: 'message_processed', intent: $json.Intent }) }}",
+        "options": {}
+      },
+      "id": "s15-respond",
+      "name": "Respond: 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2020,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "WhatsApp Messages"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "s15-log-invalid",
+      "name": "Sheets: Log Invalid",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        720,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "Webhook: WhatsApp Message": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp Messages (Demo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp Messages (Demo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Messages (Demo)": {
+      "main": [
+        [
+          {
+            "node": "Validate Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Message": {
+      "main": [
+        [
+          {
+            "node": "Message Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message Valid?": {
+      "main": [
+        [
+          {
+            "node": "Gemini: Classify Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sheets: Log Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini: Classify Message": {
+      "main": [
+        [
+          {
+            "node": "Parse Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Classification": {
+      "main": [
+        [
+          {
+            "node": "Build Processed Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Processed Item": {
+      "main": [
+        [
+          {
+            "node": "Sheets: Log Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sheets: Log Message": {
+      "main": [
+        [
+          {
+            "node": "Is Lead?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send WhatsApp Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Lead?": {
+      "main": [
+        [
+          {
+            "node": "Build Lead Item",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: 200 OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Lead Item": {
+      "main": [
+        [
+          {
+            "node": "Sheets: Log Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sheets: Log Lead": {
+      "main": [
+        [
+          {
+            "node": "Slack: Lead Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack: Lead Alert": {
+      "main": [
+        [
+          {
+            "node": "Respond: 200 OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
