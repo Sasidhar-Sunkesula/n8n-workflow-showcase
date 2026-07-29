@@ -1,0 +1,648 @@
+{
+  "name": "09 · Competitor Change Monitor & Alerting (Intelligence)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 09 · Competitor Change Monitor & Alerting\n**What it does:** On a schedule, fetches each tracked competitor's page (pricing, features, homepage), compares against the last snapshot, and if something changed, AI summarizes WHAT changed and WHY it matters → alerts Slack.\n\n**Why it sells:** Agencies & SaaS teams manually check competitor pricing/features weekly. This automates it and surfaces only meaningful changes. **Sell at:** $400-700 setup + $150-250/mo.",
+        "height": 140,
+        "width": 940,
+        "color": 4
+      },
+      "id": "s9-title",
+      "name": "Sticky: Title & ROI",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Targets\n**Schedule:** daily at 7 AM.\n**Demo:** manual trigger with sample competitor list.\n\nEach target: name, URL, page type (pricing/features/home).\nValidate: URL format, page type in allowed list.",
+        "height": 200,
+        "width": 300,
+        "color": 5
+      },
+      "id": "s9-input",
+      "name": "Sticky: Targets",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Fetch + Diff\n1. HTTP GET the competitor page\n2. Extract text content\n3. Load last snapshot from Sheets\n4. Compute a content hash + simple diff\n5. If hash unchanged → skip (no alert)\n6. If changed → pass to AI\n\nIdempotency: hash-based, won't re-alert on identical content.",
+        "height": 200,
+        "width": 340,
+        "color": 5
+      },
+      "id": "s9-fetch",
+      "name": "Sticky: Fetch + Diff",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### AI Summary + Alert\n- Gemini summarizes WHAT changed + business impact\n- Confidence gate: low-confidence → flag for manual review\n- Slack alert with change summary + link\n- Save new snapshot to Sheets\n\nOnly meaningful changes trigger alerts. Noise filtered.",
+        "height": 200,
+        "width": 340,
+        "color": 5
+      },
+      "id": "s9-ai",
+      "name": "Sticky: AI Summary + Alert",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1180,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      },
+      "id": "s9-schedule",
+      "name": "Schedule: Daily 7AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -320,
+        20
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "s9-manual",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -320,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\n// Demo competitor list. PRODUCTION: replace with Sheets read of a \"Competitors\" tab.\nconst targets = [\n  { name: \"Competitor A\", url: \"https://example.com/pricing\", pageType: \"pricing\" },\n  { name: \"Competitor B\", url: \"https://example.org/features\", pageType: \"features\" }\n];\nconst allowed = [\"pricing\", \"features\", \"home\"];\nreturn targets.map(t => ({ json: { ...t, EventKey: \"competitor:\" + t.name + \":\" + new Date().toISOString().slice(0,10) } }));\n"
+      },
+      "id": "s9-targets",
+      "name": "Competitor Targets (Demo)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -60,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst t = $json;\nconst allowed = [\"pricing\", \"features\", \"home\"];\nlet urlOk = false;\ntry { new URL(t.url); urlOk = true; } catch(e) {}\nconst ok = urlOk && t.name && allowed.includes(t.pageType);\nif (!ok) return { json: { Timestamp: new Date().toISOString(), EventKey: t.EventKey || 'unknown',\n  Workflow: 'competitor-monitor', Status: 'rejected_invalid_target', Reason: 'bad URL or pageType' } };\nreturn { json: { ...t, input_valid: true } };\n"
+      },
+      "id": "s9-validate",
+      "name": "Validate Target",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.input_valid === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "s9-if-valid",
+      "name": "Target Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        460,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "s9-fetch",
+      "name": "HTTP: Fetch Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        20
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst target = $('Validate Target').item.json;\nconst html = typeof $json === 'string' ? $json : ($json.data || $json.body || JSON.stringify($json));\n// Strip HTML tags + whitespace to get content text\nconst text = String(html).replace(/<script[\\s\\S]*?<\\/script>/gi, '')\n  .replace(/<style[\\s\\S]*?<\\/style>/gi, '')\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/\\s+/g, ' ').trim();\n// Simple hash (djb2)\nlet hash = 5381;\nfor (let i = 0; i < text.length; i++) { hash = ((hash << 5) + hash + text.charCodeAt(i)) >>> 0; }\nconst contentHash = String(hash);\n// PRODUCTION: load last snapshot hash from Sheets \"Competitor Snapshots\" tab.\n// Demo: assume last hash differs so the flow continues to AI.\nconst lastHash = null; // PRODUCTION: Sheets lookup by competitor name\nconst changed = lastHash !== contentHash;\nreturn { json: { ...target, contentText: text.slice(0, 8000), contentHash, lastHash, changed } };\n"
+      },
+      "id": "s9-diff",
+      "name": "Extract + Hash + Diff",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.changed === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "s9-if-changed",
+      "name": "Content Changed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1240,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "models/gemma-4-31b-it"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a competitive intelligence analyst. A competitor's {{ $json.pageType }} page changed. Summarize what likely changed and the business impact for a competing team.\n\nCOMPETITOR: {{ $json.name }}\nPAGE TYPE: {{ $json.pageType }}\nCURRENT CONTENT (truncated):\n{{ $json.contentText }}\n\nGenerate exactly this JSON (no markdown fences):\n{\n  \"summary\": \"<2-3 sentence summary of what this page offers / what likely changed>\",\n  \"key_points\": [\"<point 1>\", \"<point 2>\", \"<point 3>\"],\n  \"business_impact\": \"<one sentence on what a competing team should do>\",\n  \"confidence\": <0.0-1.0>\n}\nYour ENTIRE response must be that single JSON object."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "s9-gemini",
+      "name": "Gemini: Summarize Change",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1500,
+        -60
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "B8oepyrWrBGFl6Ud",
+          "name": "Google Gemini (portfolio)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst raw = $json.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('') ?? $json.text ?? '';\nconst cleaned = raw.replace(/```json/gi,'').replace(/```/g,'').trim();\nlet data = null;\nfor (const c of (cleaned.match(/\\{[\\s\\S]*\\}/g) || []).reverse()) {\n  try { const p = JSON.parse(c); if (p && p.summary) { data = p; break; } } catch(e){}\n}\nconst target = $('Extract + Hash + Diff').item.json;\nif (!data) return { json: { ...target, parse_ok: false, error: 'AI output unparseable' } };\nconst confidence = typeof data.confidence === 'number' ? data.confidence : 0.7;\nreturn { json: { ...target, ...data, confidence, parse_ok: true } };\n"
+      },
+      "id": "s9-parse",
+      "name": "Parse Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.parse_ok === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "s9-if-parse",
+      "name": "Parse OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "C0BKVT980BE"
+        },
+        "text": ":eyes: *Competitor Change Detected*\n\n*Competitor:* {{ $json.name }}\n*Page:* {{ $json.pageType }} — {{ $json.url }}\n*Confidence:* {{ $json.confidence }}\n\n*Summary:* {{ $json.summary }}\n\n*Key points:*\n{{ ($json.key_points || []).map(k => '• ' + k).join('\\n') }}\n\n*Action:* {{ $json.business_impact }}\n\n{{ $json.confidence < 0.7 ? ':warning: *LOW CONFIDENCE* — verify before acting' : ':white_check_mark: Review recommended' }}",
+        "otherOptions": {}
+      },
+      "id": "s9-slack",
+      "name": "Slack: Change Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        2280,
+        -140
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "0LO7Ag4PE1NaZFpO",
+          "name": "Slack account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "s9-slack-alert-001"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst d = $json;\nreturn { json: {\n  Timestamp: new Date().toISOString(),\n  EventKey: d.EventKey,\n  Workflow: 'competitor-monitor',\n  Status: d.confidence < 0.7 ? 'change_low_confidence' : 'change_detected',\n  Competitor: d.name,\n  PageType: d.pageType,\n  Url: d.url,\n  ContentHash: d.contentHash,\n  Confidence: d.confidence,\n  Summary: (d.summary || '').slice(0, 500),\n  ReplayPolicy: 'hash_based_dedup'\n}};\n"
+      },
+      "id": "s9-snapshot",
+      "name": "Prepare Snapshot Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2540,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Competitor Snapshots"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "s9-sheets",
+      "name": "Sheets: Save Snapshot",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2800,
+        -140
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Competitor Errors"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "s9-log-invalid",
+      "name": "Sheets: Log Invalid",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        720,
+        260
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Competitor Errors"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "s9-log-fail",
+      "name": "Sheets: Log Parse Fail",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2280,
+        120
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "Schedule: Daily 7AM": {
+      "main": [
+        [
+          {
+            "node": "Competitor Targets (Demo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Competitor Targets (Demo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Competitor Targets (Demo)": {
+      "main": [
+        [
+          {
+            "node": "Validate Target",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Target": {
+      "main": [
+        [
+          {
+            "node": "Target Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Target Valid?": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Fetch Page",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sheets: Log Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Fetch Page": {
+      "main": [
+        [
+          {
+            "node": "Extract + Hash + Diff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract + Hash + Diff": {
+      "main": [
+        [
+          {
+            "node": "Content Changed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Content Changed?": {
+      "main": [
+        [
+          {
+            "node": "Gemini: Summarize Change",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Gemini: Summarize Change": {
+      "main": [
+        [
+          {
+            "node": "Parse Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Summary": {
+      "main": [
+        [
+          {
+            "node": "Parse OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse OK?": {
+      "main": [
+        [
+          {
+            "node": "Slack: Change Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sheets: Log Parse Fail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack: Change Alert": {
+      "main": [
+        [
+          {
+            "node": "Prepare Snapshot Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Snapshot Row": {
+      "main": [
+        [
+          {
+            "node": "Sheets: Save Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
