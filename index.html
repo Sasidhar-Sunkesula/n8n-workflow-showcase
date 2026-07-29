@@ -112,70 +112,32 @@
     margin-bottom: 32px;
   }
 
-  /* Workflow cards */
-  .workflows { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .wf-card {
+  /* Services grid */
+  .services { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .service {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 24px;
     transition: border-color 0.2s;
   }
-  .wf-card:hover { border-color: var(--accent); }
-  .wf-card .wf-num {
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--accent);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 8px;
-  }
-  .wf-card h3 { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
-  .wf-card p { font-size: 14px; color: var(--text-dim); margin-bottom: 12px; }
-  .wf-tags { display: flex; gap: 6px; flex-wrap: wrap; }
-  .wf-tag {
-    font-size: 11px;
-    padding: 3px 10px;
-    border-radius: 12px;
-    background: var(--surface2);
-    color: var(--text-dim);
-    border: 1px solid var(--border);
-  }
-  .wf-tag.ai { color: var(--accent-light); border-color: var(--accent); }
-  .wf-tag.prod { color: var(--green); border-color: var(--green); }
+  .service:hover { border-color: var(--accent); }
+  .service h3 { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+  .service p { font-size: 14px; color: var(--text-dim); margin-bottom: 12px; }
+  .service .price { font-size: 14px; color: var(--accent-light); font-weight: 600; }
 
-  /* Features */
-  .features { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
-  .feature {
+  /* Case studies */
+  .case-study {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 24px;
+    margin-bottom: 16px;
   }
-  .feature-icon { font-size: 28px; margin-bottom: 12px; }
-  .feature h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
-  .feature p { font-size: 13px; color: var(--text-dim); }
-
-  /* Pricing */
-  .pricing { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .price-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 32px;
-  }
-  .price-card.featured { border-color: var(--accent); }
-  .price-card h3 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
-  .price-card .price { font-size: 36px; font-weight: 800; color: var(--accent-light); margin: 12px 0; }
-  .price-card .price span { font-size: 16px; color: var(--text-dim); font-weight: 400; }
-  .price-card ul { list-style: none; margin: 16px 0; }
-  .price-card li {
-    font-size: 14px;
-    color: var(--text-dim);
-    padding: 6px 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .price-card li::before { content: "✓ "; color: var(--green); font-weight: 700; }
+  .case-study h3 { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+  .case-study .hook { font-size: 15px; color: var(--accent-light); margin-bottom: 12px; font-weight: 600; }
+  .case-study p { font-size: 14px; color: var(--text-dim); margin-bottom: 8px; }
+  .case-study .result { font-size: 14px; color: var(--green); font-weight: 600; }
 
   /* CTA */
   .cta {
@@ -198,7 +160,7 @@
   @media (max-width: 700px) {
     .hero h1 { font-size: 28px; }
     .stats { grid-template-columns: repeat(2, 1fr); }
-    .workflows, .features, .pricing { grid-template-columns: 1fr; }
+    .services { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -208,158 +170,96 @@
 
   <!-- Hero -->
   <div class="hero">
-    <div class="hero-badge">⚡ 8 Production Workflows · Self-Hosted n8n · AI-Powered</div>
+    <div class="hero-badge">⚡ 10 Production Workflows · Self-Hosted n8n · AI-Powered</div>
     <h1>I build n8n automations<br>that don't break.</h1>
-    <p>Not demos. Not tutorials. Production systems with retries, idempotency, error handling, and audit logging — running 24/7 on real infrastructure.</p>
+    <p>Not demos. Not tutorials. Production systems with retries, error handling, idempotency, and audit logging — running 24/7 on real infrastructure.</p>
     <div class="hero-cta">
-      <a href="mailto:sasidharsunkesula579@gmail.com?subject=n8n%20Automation%20Inquiry" class="btn btn-primary">Hire Me →</a>
+      <a href="mailto:www.sasidharsunkesula579@gmail.com?subject=n8n%20Automation%20Inquiry" class="btn btn-primary">Hire Me →</a>
       <a href="https://github.com/Sasidhar-Sunkesula/n8n-workflow-showcase" class="btn btn-secondary">View Source Code</a>
     </div>
   </div>
 
   <!-- Stats -->
   <div class="stats">
-    <div class="stat"><div class="stat-num">8</div><div class="stat-label">Production Workflows</div></div>
+    <div class="stat"><div class="stat-num">10</div><div class="stat-label">Production Workflows</div></div>
     <div class="stat"><div class="stat-num">24/7</div><div class="stat-label">Uptime</div></div>
     <div class="stat"><div class="stat-num">3×</div><div class="stat-label">Retry on Every Node</div></div>
     <div class="stat"><div class="stat-num">0</div><div class="stat-label">Unhandled Failures</div></div>
   </div>
 
-  <!-- Workflows -->
+  <!-- Services -->
   <div class="section">
-    <h2>The Workflows</h2>
-    <p class="subtitle">Every workflow is open-source, fully documented, and battle-tested.</p>
-    <div class="workflows">
-      <div class="wf-card">
-        <div class="wf-num">Workflow 01</div>
-        <h3>AI Email Triage & Drafts</h3>
-        <p>Classifies incoming emails by intent, drafts replies with Gemini, routes through Slack approval before sending. 200+ emails processed, zero double-sends.</p>
-        <div class="wf-tags"><span class="wf-tag ai">Gemini AI</span><span class="wf-tag">Gmail</span><span class="wf-tag">Slack HITL</span><span class="wf-tag prod">Production</span></div>
-      </div>
-      <div class="wf-card">
-        <div class="wf-num">Workflow 02</div>
-        <h3>AI Lead Scoring & Routing</h3>
-        <p>Webhook catches form fills → validates → deduplicates → AI scores 0-100 → HOT leads get instant Slack alert + personalized auto-reply in 4.7 seconds.</p>
-        <div class="wf-tags"><span class="wf-tag ai">Gemini AI</span><span class="wf-tag">Webhook</span><span class="wf-tag">Slack</span><span class="wf-tag prod">Production</span></div>
-      </div>
-      <div class="wf-card">
-        <div class="wf-num">Workflow 03</div>
-        <h3>Document Q&A Search Bot</h3>
-        <p>Grounded answering with source citation and confidence gating. Low-confidence answers get flagged for human review instead of auto-sending.</p>
-        <div class="wf-tags"><span class="wf-tag ai">Gemini AI</span><span class="wf-tag">RAG</span><span class="wf-tag">Confidence Gate</span><span class="wf-tag prod">Production</span></div>
-      </div>
-      <div class="wf-card">
-        <div class="wf-num">Workflow 04</div>
-        <h3>Meeting Notes → Notion + Slack</h3>
-        <p>Structured extraction from meeting recordings → action items → Notion database + Slack recap. Multi-system sync with dedup.</p>
-        <div class="wf-tags"><span class="wf-tag ai">Gemini AI</span><span class="wf-tag">Notion</span><span class="wf-tag">Slack</span><span class="wf-tag prod">Production</span></div>
-      </div>
-      <div class="wf-card">
-        <div class="wf-num">Workflow 05</div>
-        <h3>Automated Client Reporting</h3>
-        <p>Pulls ad metrics per channel → AI writes narrative with trends + recommendations → branded HTML email → sent to each client every Monday. Replaces 6 hrs/week.</p>
-        <div class="wf-tags"><span class="wf-tag ai">Gemini AI</span><span class="wf-tag">Gmail</span><span class="wf-tag">Sheets</span><span class="wf-tag prod">Production</span></div>
-      </div>
-      <div class="wf-card">
-        <div class="wf-num">Workflow 06</div>
-        <h3>Lead Capture → CRM Pipeline</h3>
-        <p>Webhook → validate → dedup → enrich → AI score → instant reply → CRM log. Full pipeline from form fill to CRM entry in under 5 seconds.</p>
-        <div class="wf-tags"><span class="wf-tag ai">Gemini AI</span><span class="wf-tag">Webhook</span><span class="wf-tag">Sheets CRM</span><span class="wf-tag prod">Production</span></div>
-      </div>
-      <div class="wf-card">
-        <div class="wf-num">Workflow 07</div>
-        <h3>Invoice Extraction + Anomaly Detection</h3>
-        <p>Watches Gmail for invoice PDFs → AI extracts every field → duplicate detection → anomaly flagging (7.4× vendor average caught in testing).</p>
-        <div class="wf-tags"><span class="wf-tag ai">Gemini AI</span><span class="wf-tag">Gmail</span><span class="wf-tag">Anomaly Detection</span><span class="wf-tag prod">Production</span></div>
-      </div>
-      <div class="wf-card">
-        <div class="wf-num">Workflow 00</div>
-        <h3>Shared Error Handler</h3>
-        <p>Error Trigger → parse → Sheets DLQ → Slack alert → Gmail fallback. Attached to all 7 workflows. Every failure is caught, logged, and alerted.</p>
-        <div class="wf-tags"><span class="wf-tag">Error Trigger</span><span class="wf-tag">DLQ</span><span class="wf-tag">Slack</span><span class="wf-tag prod">Production</span></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Production Features -->
-  <div class="section">
-    <h2>Why These Aren't Demos</h2>
-    <p class="subtitle">Every workflow includes production patterns that most "n8n tutorials" skip entirely.</p>
-    <div class="features">
-      <div class="feature">
-        <div class="feature-icon">🔄</div>
-        <h3>3× Retry + Backoff</h3>
-        <p>Every external node retries 3 times with exponential backoff. API timeouts don't kill the workflow.</p>
-      </div>
-      <div class="feature">
-        <div class="feature-icon">🔒</div>
-        <h3>Idempotency Guards</h3>
-        <p>EventKey dedup prevents double-sends, double-processing, and duplicate entries. Ever.</p>
-      </div>
-      <div class="feature">
-        <div class="feature-icon">🛡️</div>
-        <h3>Input Validation</h3>
-        <p>Bad data gets rejected and logged before it reaches the AI. Garbage in ≠ garbage out.</p>
-      </div>
-      <div class="feature">
-        <div class="feature-icon">🚨</div>
-        <h3>Error Branches</h3>
-        <p>Failures route to Slack alerts + Sheets DLQ. You never discover a broken workflow from an angry client.</p>
-      </div>
-      <div class="feature">
-        <div class="feature-icon">🧠</div>
-        <h3>AI Confidence Gating</h3>
-        <p>Low-confidence AI outputs get flagged for human review instead of auto-executing.</p>
-      </div>
-      <div class="feature">
-        <div class="feature-icon">📋</div>
-        <h3>Full Audit Trail</h3>
-        <p>Every action logged to Google Sheets with timestamp, input, output, and status.</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- Pricing -->
-  <div class="section">
-    <h2>Services & Pricing</h2>
+    <h2>Services</h2>
     <p class="subtitle">Fixed-scope projects with ongoing support. No hourly billing surprises.</p>
-    <div class="pricing">
-      <div class="price-card">
-        <h3>Single Workflow</h3>
-        <div class="price">$500–800 <span>setup</span></div>
-        <ul>
-          <li>1 custom n8n workflow</li>
-          <li>AI integration (Gemini/GPT)</li>
-          <li>2–3 integrations (Gmail, Sheets, Slack, APIs)</li>
-          <li>Error handling + retries + audit logging</li>
-          <li>Deployment on your n8n instance</li>
-          <li>Documentation + sticky notes</li>
-          <li>30 days bug-fix support</li>
-        </ul>
-        <a href="mailto:sasidharsunkesula579@gmail.com?subject=Single%20Workflow%20Inquiry" class="btn btn-secondary" style="width:100%;text-align:center;">Get Started</a>
+    <div class="services">
+      <div class="service">
+        <h3>Automated Client Reporting</h3>
+        <p>Scheduled metrics pull → AI narrative → branded HTML email → sent to each client automatically. Replaces 5–8 hours/week of manual reporting.</p>
+        <div class="price">$500–800 setup + $200–300/mo</div>
       </div>
-      <div class="price-card featured">
-        <h3>Workflow + Retainer</h3>
-        <div class="price">$500–800 <span>+ $200–300/mo</span></div>
-        <ul>
-          <li>Everything in Single Workflow</li>
-          <li>24/7 hosting on managed VPS</li>
-          <li>Monitoring + failure alerts to your Slack</li>
-          <li>Monthly optimization + 1 change request</li>
-          <li>Priority support (24h response)</li>
-          <li>Monthly results report</li>
-          <li>Cancel anytime</li>
-        </ul>
-        <a href="mailto:sasidharsunkesula579@gmail.com?subject=Workflow%20%2B%20Retainer%20Inquiry" class="btn btn-primary" style="width:100%;text-align:center;">Get Started →</a>
+      <div class="service">
+        <h3>Lead Capture → AI Score → CRM</h3>
+        <p>Webhook → enrichment → AI scoring → tiered routing + instant reply. HOT leads get Slack alerts in 4.7 seconds.</p>
+        <div class="price">$600–1000 setup + $200–350/mo</div>
       </div>
+      <div class="service">
+        <h3>Invoice Extraction + Anomaly Detection</h3>
+        <p>Gmail watch → AI extraction → duplicate detection → anomaly flagging. Caught a $757 duplicate on day one.</p>
+        <div class="price">$700–1200 setup + $250–400/mo</div>
+      </div>
+      <div class="service">
+        <h3>Customer Onboarding Automation</h3>
+        <p>Signup webhook → AI personalized welcome email → CRM + Slack notify. Onboarding becomes instant, personalized, tracked.</p>
+        <div class="price">$600–1000 setup + $200–350/mo</div>
+      </div>
+      <div class="service">
+        <h3>Competitor Change Monitor</h3>
+        <p>Daily competitor page monitoring → hash diff → AI summary → Slack alert. Only alerts on meaningful changes.</p>
+        <div class="price">$400–700 setup + $150–250/mo</div>
+      </div>
+      <div class="service">
+        <h3>Custom Workflow Build</h3>
+        <p>Have a different process? I'll build a custom n8n workflow tailored to your data sources, branding, and team.</p>
+        <div class="price">$500–1200 setup + retainer</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Case Studies -->
+  <div class="section">
+    <h2>Case Studies</h2>
+    <p class="subtitle">Real results from production deployments.</p>
+
+    <div class="case-study">
+      <h3>Automated Client Reporting for Marketing Agencies</h3>
+      <div class="hook">"Your blended ROAS improved 14.7% week-over-week, driven primarily by Meta's CPA dropping after the creative refresh."</div>
+      <p>That's not a template. That's a real AI-generated insight from the data. The workflow pulls metrics from Google Ads, Meta, GA4, writes a narrative, builds a branded HTML email, and sends it to each client automatically.</p>
+      <div class="result">Result: 30–45 hours/month saved. Reports go out Monday 8 AM sharp, not "sometime Tuesday."</div>
+    </div>
+
+    <div class="case-study">
+      <h3>Invoice Extraction + Duplicate Detection for Finance Teams</h3>
+      <div class="hook">"Caught a $757 duplicate invoice on day one. One catch paid for the entire setup."</div>
+      <p>The workflow watches Gmail for invoice PDFs, extracts every field with AI, detects duplicates (invoice # + vendor + amount), and flags anomalies (amounts >2× vendor average). The finance team gets Slack alerts immediately.</p>
+      <div class="result">Result: Zero duplicate payments. Proactive anomaly detection. 10–20 hours/month saved.</div>
+    </div>
+
+    <div class="case-study">
+      <h3>Customer Onboarding Automation for SaaS</h3>
+      <div class="hook">"Most SaaS churn happens in the first 30 days. The culprit? Slow, generic onboarding."</div>
+      <p>The moment a customer signs up, a webhook fires. Gemini AI writes a personalized welcome email referencing their company and plan. The email goes out within seconds, not days. The success team gets a Slack notification immediately.</p>
+      <div class="result">Result: Onboarding becomes instant, personalized, tracked. Nothing falls through the cracks.</div>
     </div>
   </div>
 
   <!-- CTA -->
   <div class="cta">
-    <h2>Still writing reports by hand?</h2>
-    <p>Let's automate the boring stuff. Send me your workflow and I'll tell you exactly what I'd build.</p>
-    <a href="mailto:sasidharsunkesula579@gmail.com?subject=n8n%20Automation%20Inquiry" class="btn btn-primary">Email Me →</a>
+    <h2>Ready to automate your busywork?</h2>
+    <p>Let's talk about your process. I'll tell you exactly what I'd build, how long it takes, and what it costs.</p>
+    <div class="hero-cta">
+      <a href="mailto:www.sasidharsunkesula579@gmail.com?subject=n8n%20Automation%20Inquiry" class="btn btn-primary">Email Me →</a>
+      <a href="https://linkedin.com/in/sasidhar-sunkesula" class="btn btn-secondary">LinkedIn</a>
+    </div>
   </div>
 
   <!-- Footer -->
@@ -368,8 +268,8 @@
     <p style="margin-top:8px;">
       <a href="https://github.com/Sasidhar-Sunkesula">GitHub</a> ·
       <a href="https://linkedin.com/in/sasidhar-sunkesula">LinkedIn</a> ·
-      <a href="https://x.com/Sasidhar63">X/Twitter</a> ·
-      <a href="https://dev.to/sasidharsunkesula">dev.to</a>
+      <a href="https://dev.to/sasidharsunkesula">dev.to</a> ·
+      <a href="https://x.com/Sasidhar63">X/Twitter</a>
     </p>
   </div>
 
