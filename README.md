@@ -7,7 +7,7 @@
 
 ## What This Is
 
-Thirteen production-grade n8n workflows demonstrating AI-powered business automation across **Support, Sales, Knowledge, Operations, Marketing, Finance, Competitive Intelligence, and SaaS** — plus a shared error-handling infrastructure workflow. Every workflow runs with **real integrations** (Gmail, Google Sheets, Slack, Notion) and **real AI** (Google Gemini / gemma-4-31b-it), not mocks.
+Fourteen production-grade n8n workflows demonstrating AI-powered business automation across **Support, Sales, Knowledge, Operations, Marketing, Finance, Competitive Intelligence, and SaaS** — plus a shared error-handling infrastructure workflow. Every workflow runs with **real integrations** (Gmail, Google Sheets, Slack, Notion) and **real AI** (Google Gemini / gemma-4-31b-it), not mocks.
 
 Each workflow is built to production standards: retry logic, idempotency guards, input validation, structured audit logging, human-in-the-loop approval gates, confidence gating, and a shared error handler with dead-letter queue + multi-channel alerting.
 
@@ -31,6 +31,7 @@ Each workflow is built to production standards: retry logic, idempotency guards,
 | 11 | [Lead Pipeline Manager](workflows/11-lead-pipeline/) | Sales | Daily follow-up cadence → stage-based messages → Slack alerts | $400–700 + $150–250/mo |
 | 12 | [Proposal Generator](workflows/12-proposal-generator/) | Sales | Discovery notes → AI proposal with ROI → email + pipeline log | $600–1000 + $200–350/mo |
 | 13 | [Client Health Monitor](workflows/13-client-health/) | SaaS | Daily health score → at-risk flags → Slack alerts | $600–1000 + $200–350/mo |
+| 14 | [Support Ticket Auto-Triage](workflows/14-support-triage/) | Support | Webhook → AI categorize → draft response → route to team | $600–1000 + $200–350/mo |
 
 ---
 
@@ -102,7 +103,10 @@ n8n-workflow-showcase/
     ├── 12-proposal-generator/
     │   ├── workflow.json
     │   └── README.md
-    └── 13-client-health/
+    ├── 13-client-health/
+    │   ├── workflow.json
+    │   └── README.md
+    └── 14-support-triage/
         ├── workflow.json
         └── README.md
 ```

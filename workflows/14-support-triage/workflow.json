@@ -1,0 +1,515 @@
+{
+  "name": "14 · Support Ticket Auto-Triage & Response",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 14 · Support Ticket Auto-Triage & Response\n**What it does:** Watches a support inbox → AI categorizes each ticket (bug, feature request, billing, general) → drafts a response → routes to the right team on Slack → logs to support sheet.\n\n**Why it matters:** Support teams spend hours triaging tickets manually. This auto-categorizes, drafts responses, and routes to the right person in seconds. **Sell at:** $600-1000 setup + $200-350/mo.",
+        "height": 130,
+        "width": 940,
+        "color": 4
+      },
+      "id": "s14-title",
+      "name": "Sticky: Title",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Input\n**Webhook** receives support ticket:\n- Customer name, email, subject, message\n- Source (email, form, chat)\n\n**Demo:** manual trigger with sample tickets.\nValidate: email format, subject present, message > 10 chars.",
+        "height": 200,
+        "width": 300,
+        "color": 5
+      },
+      "id": "s14-input",
+      "name": "Sticky: Input",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### AI Triage\nGemini categorizes each ticket:\n- Category: bug / feature / billing / general / spam\n- Priority: urgent / high / normal / low\n- Suggested response (draft)\n- Routing: which team/person should handle it\n\nConfidence gate: low-confidence → flag for manual review.",
+        "height": 220,
+        "width": 360,
+        "color": 5
+      },
+      "id": "s14-ai",
+      "name": "Sticky: AI Triage",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Output\n- Categorize each ticket (bug/feature/billing/general/spam)\n- Draft a response\n- Route to the right team on Slack\n- Log to Support Tickets sheet\n\nThe support team gets a Slack message: 'New urgent bug ticket from [customer]. Here's a draft response.'",
+        "height": 200,
+        "width": 340,
+        "color": 5
+      },
+      "id": "s14-output",
+      "name": "Sticky: Output",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1180,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "support-triage",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "s14-webhook",
+      "name": "Webhook: New Ticket",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        20
+      ],
+      "webhookId": "s14-webhook-support-001"
+    },
+    {
+      "parameters": {},
+      "id": "s14-manual",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -320,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\n// Demo support tickets. PRODUCTION: replace with webhook body from your support system.\nconst tickets = [\n  { customerName: \"Sarah Mitchell\", email: \"sarah@brightwavecoffee.com\", subject: \"Can't export my reports to PDF\", message: \"I've been trying to export my monthly reports to PDF but the button is greyed out. I'm on the Growth plan. This is blocking my client reporting.\", source: \"email\" },\n  { customerName: \"Marcus Chen\", email: \"marcus@fitlifestudios.com\", subject: \"Feature request: dark mode\", message: \"Would love to see a dark mode option in the dashboard. My team works late and the bright white is hard on the eyes.\", source: \"form\" },\n  { customerName: \"Diana Torres\", email: \"diana@greenscapellc.com\", subject: \"Double charged this month\", message: \"I was charged twice for my subscription this month. Order #12345 and #12346 are identical. Please refund one.\", source: \"email\" }\n];\nreturn tickets.map(t => ({ json: { ...t, EventKey: \"ticket:\" + t.email + \":\" + new Date().toISOString().slice(0,10) } }));\n"
+      },
+      "id": "s14-tickets",
+      "name": "Support Tickets (Demo)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -60,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst t = $json;\nconst emailOk = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(String(t.email || ''));\nconst ok = emailOk && t.subject && String(t.subject).length >= 3 && String(t.message || '').length > 10;\nif (!ok) return { json: { Timestamp: new Date().toISOString(), EventKey: t.EventKey || 'unknown',\n  Workflow: 'support-triage', Status: 'rejected_invalid_ticket', Reason: 'bad email/subject/message' } };\nreturn { json: { ...t, input_valid: true } };\n"
+      },
+      "id": "s14-validate",
+      "name": "Validate Ticket",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.input_valid === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "s14-if-valid",
+      "name": "Ticket Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        460,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "models/gemma-4-31b-it"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a support team lead. Categorize this support ticket and draft a response.\n\nTICKET:\n- Customer: {{ $json.customerName }} ({{ $json.email }})\n- Subject: {{ $json.subject }}\n- Message: {{ $json.message }}\n- Source: {{ $json.source }}\n\nGenerate exactly this JSON (no markdown fences):\n{\n  \"category\": \"<bug|feature|billing|general|spam>\",\n  \"priority\": \"<urgent|high|normal|low>\",\n  \"suggestedResponse\": \"<draft response to the customer, 2-3 sentences, empathetic and helpful>\",\n  \"routing\": \"<which team should handle: engineering|product|billing|support>\",\n  \"confidence\": <0.0-1.0>\n}\n\nCategorization guidelines:\n- bug: something is broken or not working\n- feature: request for new functionality\n- billing: payment, refund, subscription issues\n- general: general questions, how-to\n- spam: unsolicited, irrelevant\n\nPriority guidelines:\n- urgent: blocking customer, data loss, payment issues\n- high: important but not blocking\n- normal: standard request\n- low: nice-to-have, general questions\n\nYour ENTIRE response must be that single JSON object."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "s14-gemini",
+      "name": "Gemini: Triage Ticket",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        -60
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "B8oepyrWrBGFl6Ud",
+          "name": "Google Gemini (portfolio)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst raw = $json.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('') ?? $json.text ?? '';\nconst cleaned = raw.replace(/```json/gi,'').replace(/```/g,'').trim();\nlet data = null;\nfor (const c of (cleaned.match(/\\{[\\s\\S]*\\}/g) || []).reverse()) {\n  try { const p = JSON.parse(c); if (p && p.category) { data = p; break; } } catch(e){}\n}\nconst ticket = $('Validate Ticket').item.json;\nif (!data) return { json: { ...ticket, parse_ok: false, error: 'AI output unparseable',\n  category: 'general', priority: 'normal', suggestedResponse: 'Thanks for reaching out. We\\'ll get back to you soon.', routing: 'support', confidence: 0.5 } };\nconst confidence = typeof data.confidence === 'number' ? data.confidence : 0.7;\nreturn { json: { ...ticket, ...data, confidence, parse_ok: true } };\n"
+      },
+      "id": "s14-parse",
+      "name": "Parse Triage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst t = $json;\nreturn { json: {\n  Timestamp: new Date().toISOString(),\n  EventKey: t.EventKey,\n  Workflow: 'support-triage',\n  Status: 'ticket_triaged',\n  CustomerName: t.customerName,\n  Email: t.email,\n  Subject: t.subject,\n  Source: t.source,\n  Category: t.category,\n  Priority: t.priority,\n  SuggestedResponse: t.suggestedResponse,\n  Routing: t.routing,\n  Confidence: t.confidence,\n  ReplayPolicy: 'idempotent_skip'\n}};\n"
+      },
+      "id": "s14-build",
+      "name": "Build Ticket Item",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1240,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Support Tickets"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "s14-sheets",
+      "name": "Sheets: Log Ticket",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1500,
+        -60
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "C0BKVT980BE"
+        },
+        "text": ":ticket: *New Support Ticket*\n\n*Customer:* {{ $json.CustomerName }} ({{ $json.Email }})\n*Subject:* {{ $json.Subject }}\n*Category:* {{ $json.Category }} | *Priority:* {{ $json.Priority }} | *Route to:* {{ $json.Routing }}\n*Source:* {{ $json.Source }} | *Confidence:* {{ $json.Confidence }}\n\n*Suggested response:*\n> {{ $json.SuggestedResponse }}\n\n:writing_hand: Review and send. {{ $json.Priority === 'urgent' ? '🚨 URGENT — handle immediately.' : '' }}",
+        "otherOptions": {}
+      },
+      "id": "s14-slack",
+      "name": "Slack: Ticket Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1760,
+        -60
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "0LO7Ag4PE1NaZFpO",
+          "name": "Slack account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "s14-slack-ticket-001"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, status: 'ticket_triaged', category: $json.Category, priority: $json.Priority, routing: $json.Routing }) }}",
+        "options": {}
+      },
+      "id": "s14-respond",
+      "name": "Respond: 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2020,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Support Tickets"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "s14-log-invalid",
+      "name": "Sheets: Log Invalid",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        720,
+        260
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Support Tickets"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "s14-log-fail",
+      "name": "Sheets: Log Parse Fail",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1240,
+        160
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "Webhook: New Ticket": {
+      "main": [
+        [
+          {
+            "node": "Support Tickets (Demo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Support Tickets (Demo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Support Tickets (Demo)": {
+      "main": [
+        [
+          {
+            "node": "Validate Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Ticket": {
+      "main": [
+        [
+          {
+            "node": "Ticket Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ticket Valid?": {
+      "main": [
+        [
+          {
+            "node": "Gemini: Triage Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sheets: Log Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini: Triage Ticket": {
+      "main": [
+        [
+          {
+            "node": "Parse Triage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Triage": {
+      "main": [
+        [
+          {
+            "node": "Build Ticket Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Ticket Item": {
+      "main": [
+        [
+          {
+            "node": "Sheets: Log Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sheets: Log Ticket": {
+      "main": [
+        [
+          {
+            "node": "Slack: Ticket Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack: Ticket Alert": {
+      "main": [
+        [
+          {
+            "node": "Respond: 200 OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
