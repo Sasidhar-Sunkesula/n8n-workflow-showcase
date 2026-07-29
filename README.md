@@ -7,7 +7,7 @@
 
 ## What This Is
 
-Seven production-grade n8n workflows demonstrating AI-powered business automation across **Support, Sales, Knowledge, Operations, Marketing, and Finance** — plus a shared error-handling infrastructure workflow. Every workflow runs with **real integrations** (Gmail, Google Sheets, Slack, Notion) and **real AI** (Google Gemini / gemma-4-31b-it), not mocks.
+Eight production-grade n8n workflows demonstrating AI-powered business automation across **Support, Sales, Knowledge, Operations, Marketing, and Finance** — plus a shared error-handling infrastructure workflow. Every workflow runs with **real integrations** (Gmail, Google Sheets, Slack, Notion) and **real AI** (Google Gemini / gemma-4-31b-it), not mocks.
 
 Each workflow is built to production standards: retry logic, idempotency guards, input validation, structured audit logging, human-in-the-loop approval gates, confidence gating, and a shared error handler with dead-letter queue + multi-channel alerting.
 
@@ -24,7 +24,8 @@ Each workflow is built to production standards: retry logic, idempotency guards,
 | 04 | [Meeting Notes → Notion + Slack](workflows/04-meeting-notes/) | Operations | Structured JSON extraction + dedup + multi-system sync | $300–600 + $100/mo |
 | 05 | [Automated Agency Client Reporting](workflows/05-agency-reporting/) | Marketing | Scheduled metrics pull → AI narrative → branded HTML email | $500–800 + $200–300/mo |
 | 06 | [Lead Capture → Enrich → AI Score → CRM + Reply](workflows/06-lead-routing/) | Sales | Webhook → enrichment → AI scoring → tiered routing + instant reply | $600–1000 + $200–350/mo |
-| 07 | [Invoice & Document Extraction Pipeline](workflows/07-invoice-extraction/) | Finance | Gmail watch → AI extraction → duplicate/anomaly detection → ledger | $700–1200 + $250–400/mo |
+| 07 | [Invoice Extraction + Anomaly Detection](workflows/07-invoice-extraction/) | Finance | Gmail watch → AI extraction → duplicate/anomaly detection → ledger | $700–1200 + $250–400/mo |
+| 08 | [Social Media Content Repurposing](workflows/08-content-repurpose/) | Marketing | 1 article → 3 platform variants (Twitter/LinkedIn/hook) → Slack review | $400–700 + $150–250/mo |
 
 ---
 
@@ -78,7 +79,10 @@ n8n-workflow-showcase/
     ├── 06-lead-routing/
     │   ├── workflow.json
     │   └── README.md
-    └── 07-invoice-extraction/
+    ├── 07-invoice-extraction/
+    │   ├── workflow.json
+    │   └── README.md
+    └── 08-content-repurpose/
         ├── workflow.json
         └── README.md
 ```

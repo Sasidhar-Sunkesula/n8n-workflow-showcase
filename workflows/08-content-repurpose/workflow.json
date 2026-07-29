@@ -1,0 +1,566 @@
+{
+  "name": "08 · Social Media Content Repurposing Pipeline (Marketing)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 08 · Social Media Content Repurposing Pipeline\n**What it does:** Takes one blog post / long-form content → AI generates platform-specific posts (X/Twitter thread, LinkedIn post, short-form hook) → routes each for human approval → logs to content calendar.\n\n**Why it sells:** Content teams spend hours reformatting one piece of content for each platform. This turns 1 article into 3 ready-to-post pieces in 60 seconds. **Sell at:** $400-700 setup + $150-250/mo.",
+        "height": 140,
+        "width": 940,
+        "color": 4
+      },
+      "id": "s8-title",
+      "name": "Sticky: Title & ROI",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Input\n**Webhook** receives the source content:\n- title, body (markdown), target platforms\n\n**Demo:** manual trigger with sample blog post.\nValidate: body length > 100 chars, at least 1 platform.",
+        "height": 200,
+        "width": 300,
+        "color": 5
+      },
+      "id": "s8-input",
+      "name": "Sticky: Input",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### AI Generation\nGemini generates 3 variants from one source:\n1. **X/Twitter thread** (hook + 3-5 tweets, <280 chars each)\n2. **LinkedIn post** (professional, 150-300 words)\n3. **Short hook** (1 punchy line for ads/reels)\n\nEach with platform-appropriate tone + hashtags.",
+        "height": 200,
+        "width": 340,
+        "color": 5
+      },
+      "id": "s8-ai",
+      "name": "Sticky: AI Generation",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Approval + Log\n- Parse the 3 variants from AI output\n- Route to Slack for human review (approve/edit/reject)\n- Log to content calendar (Sheets)\n- Confidence gate: low-confidence → flag for rewrite\n\nNothing posts automatically. Human approves first.",
+        "height": 200,
+        "width": 340,
+        "color": 5
+      },
+      "id": "s8-output",
+      "name": "Sticky: Approval + Log",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1180,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "content-repurpose",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "s8-webhook",
+      "name": "Webhook: Content In",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        20
+      ],
+      "webhookId": "s8-webhook-content-001"
+    },
+    {
+      "parameters": {},
+      "id": "s8-manual",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -320,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// Demo source content. PRODUCTION: replace with webhook body or CMS fetch.\nconst sample = {\n  title: \"The Most Profitable n8n Automation Nobody Talks About: Invoice Data Entry\",\n  body: \"Everyone wants to build AI chatbots. Nobody wants to automate invoice data entry. That's exactly why it's the most profitable n8n automation you can build. Finance teams spend 3-6 hours per week manually typing invoice data. I built a workflow that watches Gmail for invoice PDFs, extracts every field with AI, catches duplicates, and flags anomalies. It caught a $757 duplicate payment on day one. Boring = profitable.\",\n  platforms: [\"twitter\", \"linkedin\", \"hook\"]\n};\nconst input = $json.body && $json.body.title ? $json.body : sample;\nreturn { json: { ...input, EventKey: \"content:\" + (input.title || 'untitled').slice(0,40) + \":\" + new Date().toISOString().slice(0,10) } };\n"
+      },
+      "id": "s8-demo",
+      "name": "Source Content (Demo)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -60,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst d = $json;\nconst ok = d.body && String(d.body).length > 100 && Array.isArray(d.platforms) && d.platforms.length > 0;\nif (!ok) return { json: { Timestamp: new Date().toISOString(), EventKey: d.EventKey || 'unknown',\n  Workflow: 'content-repurpose', Status: 'rejected_invalid_input', Reason: 'body too short or no platforms' } };\nreturn { json: { ...d, input_valid: true } };\n"
+      },
+      "id": "s8-validate",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.input_valid === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "s8-if-valid",
+      "name": "Input Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        460,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "models/gemma-4-31b-it"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an expert content marketer. Take this source content and generate THREE platform-specific variants.\n\nSOURCE TITLE: {{ $json.title }}\nSOURCE BODY: {{ $json.body }}\n\nGenerate exactly this JSON (no markdown fences, no commentary):\n{\n  \"twitter_thread\": [\"<tweet 1 - hook, <280 chars>\", \"<tweet 2, <280 chars>\", \"<tweet 3, <280 chars>\"],\n  \"linkedin_post\": \"<professional LinkedIn post, 150-300 words, with 3-5 relevant hashtags at the end>\",\n  \"short_hook\": \"<one punchy line <100 chars for ads/reels>\",\n  \"confidence\": <0.0-1.0>\n}\n\nRules:\n- Twitter: punchy, conversational, each tweet stands alone, end thread with a CTA\n- LinkedIn: professional but human, tell the story, end with insight + hashtags\n- Hook: maximum impact, minimum words\n- Match the source's core message exactly — don't invent facts\n- Your ENTIRE response must be that single JSON object."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "s8-gemini",
+      "name": "Gemini: Generate Variants",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        20
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "B8oepyrWrBGFl6Ud",
+          "name": "Google Gemini (portfolio)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst raw = $json.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('') ?? $json.text ?? '';\nconst cleaned = raw.replace(/```json/gi,'').replace(/```/g,'').trim();\nlet data = null;\nfor (const c of (cleaned.match(/\\{[\\s\\S]*\\}/g) || []).reverse()) {\n  try { const p = JSON.parse(c); if (p && (p.twitter_thread || p.linkedin_post)) { data = p; break; } } catch(e){}\n}\nconst src = $('Validate Input').item.json;\nif (!data) return { json: { ...src, parse_ok: false, error: 'AI output unparseable' } };\nconst confidence = typeof data.confidence === 'number' ? data.confidence : 0.7;\nreturn { json: { ...src, ...data, confidence, parse_ok: true } };\n"
+      },
+      "id": "s8-parse",
+      "name": "Parse Variants",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.parse_ok === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "s8-if-parse",
+      "name": "Parse OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1240,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "C0BKVT980BE"
+        },
+        "text": ":writing_hand: *New Content Variants Ready for Review*\n\n*Source:* {{ $json.title }}\n*Confidence:* {{ $json.confidence }}\n\n*:bird: TWITTER THREAD:*\n{{ ($json.twitter_thread || []).map((t,i) => (i+1) + '. ' + t).join('\\n') }}\n\n*:linkedin: LINKEDIN:*\n{{ $json.linkedin_post }}\n\n*:zap: HOOK:*\n{{ $json.short_hook }}\n\n{{ $json.confidence < 0.7 ? ':warning: *LOW CONFIDENCE* — review carefully before posting' : ':white_check_mark: Ready to post' }}\n\n_Review and post manually. Nothing posts automatically._",
+        "otherOptions": {}
+      },
+      "id": "s8-slack",
+      "name": "Slack: Review Variants",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1500,
+        -60
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "0LO7Ag4PE1NaZFpO",
+          "name": "Slack account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "s8-slack-review-001"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst d = $json;\nreturn { json: {\n  Timestamp: new Date().toISOString(),\n  EventKey: d.EventKey,\n  Workflow: 'content-repurpose',\n  Status: d.confidence < 0.7 ? 'generated_low_confidence' : 'generated_ready',\n  SourceTitle: (d.title || '').slice(0, 100),\n  Platforms: (d.platforms || []).join(', '),\n  Confidence: d.confidence,\n  TwitterTweets: (d.twitter_thread || []).length,\n  HasLinkedIn: d.linkedin_post ? 'yes' : 'no',\n  HasHook: d.short_hook ? 'yes' : 'no',\n  ReplayPolicy: 'idempotent_skip'\n}};\n"
+      },
+      "id": "s8-log",
+      "name": "Prepare Calendar Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Content Calendar"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "s8-sheets",
+      "name": "Sheets: Content Calendar",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2020,
+        -60
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, status: 'variants_generated', confidence: $json.Confidence, review: 'Check Slack for variants' }) }}",
+        "options": {}
+      },
+      "id": "s8-respond",
+      "name": "Respond: 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2280,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Content Errors"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "s8-log-invalid",
+      "name": "Sheets: Log Invalid",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        720,
+        260
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Content Errors"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "s8-log-fail",
+      "name": "Sheets: Log Parse Fail",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1500,
+        200
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "Webhook: Content In": {
+      "main": [
+        [
+          {
+            "node": "Source Content (Demo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Source Content (Demo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Source Content (Demo)": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Input Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input Valid?": {
+      "main": [
+        [
+          {
+            "node": "Gemini: Generate Variants",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sheets: Log Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini: Generate Variants": {
+      "main": [
+        [
+          {
+            "node": "Parse Variants",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Variants": {
+      "main": [
+        [
+          {
+            "node": "Parse OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse OK?": {
+      "main": [
+        [
+          {
+            "node": "Slack: Review Variants",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sheets: Log Parse Fail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack: Review Variants": {
+      "main": [
+        [
+          {
+            "node": "Prepare Calendar Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Calendar Row": {
+      "main": [
+        [
+          {
+            "node": "Sheets: Content Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sheets: Content Calendar": {
+      "main": [
+        [
+          {
+            "node": "Respond: 200 OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
