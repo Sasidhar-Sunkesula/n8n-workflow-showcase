@@ -1,0 +1,555 @@
+{
+  "name": "12 · Proposal Generator (Sales Automation)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 12 · Proposal Generator (Sales Automation)\n**What it does:** Takes discovery call notes (company, process, hours, pain points) → AI generates a customized proposal with scope, timeline, pricing, and ROI calculation → sends it to the prospect via email → logs to pipeline.\n\n**Why it matters:** Proposals take 1-2 hours to write. This generates a professional, customized proposal in 60 seconds. The fortune is in the follow-up, and fast proposals win deals.",
+        "height": 130,
+        "width": 940,
+        "color": 4
+      },
+      "id": "s12-title",
+      "name": "Sticky: Title",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Input\n**Webhook** receives discovery call notes:\n- Company name, contact name, email\n- Process to automate\n- Hours/week spent\n- Hourly rate\n- Pain points\n- Volume (clients/customers/invoices per month)\n\nValidate: email format, company name, hours > 0.",
+        "height": 200,
+        "width": 300,
+        "color": 5
+      },
+      "id": "s12-input",
+      "name": "Sticky: Input",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### AI Proposal Generation\nGemini generates a full proposal:\n- Problem statement (customized to their pain)\n- Solution description (workflow steps)\n- ROI calculation (hours saved, cost saved, payback)\n- Pricing (setup + monthly retainer)\n- Timeline (4 weeks)\n- Next steps\n\nConfidence gate: low-confidence → flag for manual review.",
+        "height": 220,
+        "width": 360,
+        "color": 5
+      },
+      "id": "s12-ai",
+      "name": "Sticky: AI Proposal Generation",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Output\n- Send proposal email to prospect\n- Log to pipeline (stage: proposal_sent)\n- Slack notification: 'Proposal sent to [company]'\n- Schedule follow-up reminder (day 3)\n\nProposal goes out within minutes of the discovery call, not days. Speed wins deals.",
+        "height": 200,
+        "width": 340,
+        "color": 5
+      },
+      "id": "s12-output",
+      "name": "Sticky: Output",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1180,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "proposal-generator",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "s12-webhook",
+      "name": "Webhook: Discovery Notes",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        20
+      ],
+      "webhookId": "s12-webhook-proposal-001"
+    },
+    {
+      "parameters": {},
+      "id": "s12-manual",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -320,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// Demo discovery call notes. PRODUCTION: replace with webhook body from your CRM/form.\nconst notes = {\n  contactName: \"Ryan Ellis\",\n  email: \"ryan@redeggmarketing.com\",\n  company: \"Red Egg Marketing\",\n  process: \"client reporting\",\n  hoursPerWeek: 8,\n  hourlyRate: 30,\n  volume: 15,\n  painPoints: \"Reports go out late. Account managers hate writing them. Clients complain about generic insights.\",\n  industry: \"marketing agency\"\n};\nconst input = $json.body && $json.body.email ? $json.body : notes;\nreturn { json: { ...input, EventKey: \"proposal:\" + input.email + \":\" + new Date().toISOString().slice(0,10) } };\n"
+      },
+      "id": "s12-notes",
+      "name": "Discovery Notes (Demo)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -60,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst n = $json;\nconst emailOk = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(String(n.email || ''));\nconst ok = emailOk && n.company && String(n.company).length >= 2 && (n.hoursPerWeek || 0) > 0;\nif (!ok) return { json: { Timestamp: new Date().toISOString(), EventKey: n.EventKey || 'unknown',\n  Workflow: 'proposal-generator', Status: 'rejected_invalid_notes', Reason: 'bad email/company/hours' } };\nreturn { json: { ...n, input_valid: true } };\n"
+      },
+      "id": "s12-validate",
+      "name": "Validate Notes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.input_valid === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "s12-if-valid",
+      "name": "Notes Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        460,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "models/gemma-4-31b-it"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a professional automation consultant. Generate a customized automation proposal based on these discovery call notes.\n\nDISCOVERY NOTES:\n- Contact: {{ $json.contactName }} at {{ $json.company }}\n- Process to automate: {{ $json.process }}\n- Hours/week spent: {{ $json.hoursPerWeek }}\n- Hourly rate: ${{ $json.hourlyRate }}\n- Volume: {{ $json.volume }} per month\n- Pain points: {{ $json.painPoints }}\n- Industry: {{ $json.industry }}\n\nGenerate a proposal with these sections:\n1. **Problem** — restate their pain in their own words (2-3 sentences)\n2. **Solution** — describe the n8n workflow in 4-5 plain-language steps\n3. **ROI** — calculate: hours saved/month (hours × 4.33 × 0.9), labor cost saved/month (hours saved × rate), payback period\n4. **Investment** — setup cost ($500-1200 based on complexity) + monthly retainer ($150-400)\n5. **Timeline** — 4 weeks (discovery, build, test, deploy)\n6. **Next steps** — reply to schedule a follow-up call\n\nGenerate exactly this JSON (no markdown fences):\n{\n  \"subject\": \"<email subject line>\",\n  \"body\": \"<full proposal email body, plain text>\",\n  \"setupCost\": <number>,\n  \"monthlyCost\": <number>,\n  \"hoursSavedPerMonth\": <number>,\n  \"laborSavedPerMonth\": <number>,\n  \"paybackMonths\": <number>,\n  \"confidence\": <0.0-1.0>\n}\nYour ENTIRE response must be that single JSON object."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "s12-gemini",
+      "name": "Gemini: Generate Proposal",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        -60
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "B8oepyrWrBGFl6Ud",
+          "name": "Google Gemini (portfolio)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst raw = $json.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('') ?? $json.text ?? '';\nconst cleaned = raw.replace(/```json/gi,'').replace(/```/g,'').trim();\nlet data = null;\nfor (const c of (cleaned.match(/\\{[\\s\\S]*\\}/g) || []).reverse()) {\n  try { const p = JSON.parse(c); if (p && p.body) { data = p; break; } } catch(e){}\n}\nconst notes = $('Validate Notes').item.json;\nif (!data) return { json: { ...notes, parse_ok: false, error: 'AI output unparseable',\n  subject: 'Automation Proposal for ' + notes.company, body: 'Hi ' + notes.contactName + ', thanks for the call. I\\'ll send a detailed proposal within 2 days.', confidence: 0.5 } };\nconst confidence = typeof data.confidence === 'number' ? data.confidence : 0.7;\nreturn { json: { ...notes, ...data, confidence, parse_ok: true } };\n"
+      },
+      "id": "s12-parse",
+      "name": "Parse Proposal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $json.email }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "message": "={{ $json.body }}",
+        "options": {}
+      },
+      "id": "s12-gmail",
+      "name": "Gmail: Send Proposal",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1240,
+        -60
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "6cOkI9yXp7fgLHw4",
+          "name": "Gmail account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "s12-gmail-proposal-001"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst n = $json;\nreturn { json: {\n  Timestamp: new Date().toISOString(),\n  EventKey: n.EventKey,\n  Workflow: 'proposal-generator',\n  Status: 'proposal_sent',\n  ContactName: n.contactName,\n  Company: n.company,\n  Email: n.email,\n  Process: n.process,\n  SetupCost: n.setupCost,\n  MonthlyCost: n.monthlyCost,\n  HoursSavedPerMonth: n.hoursSavedPerMonth,\n  LaborSavedPerMonth: n.laborSavedPerMonth,\n  PaybackMonths: n.paybackMonths,\n  Confidence: n.confidence,\n  Stage: 'proposal_sent',\n  ReplayPolicy: 'idempotent_skip'\n}};\n"
+      },
+      "id": "s12-log",
+      "name": "Prepare Pipeline Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Lead Pipeline"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "s12-sheets",
+      "name": "Sheets: Log to Pipeline",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1760,
+        -60
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "C0BKVT980BE"
+        },
+        "text": ":envelope_with_arrow: *Proposal Sent*\n\n*Prospect:* {{ $json.ContactName }} ({{ $json.Company }})\n*Process:* {{ $json.Process }}\n*Setup:* ${{ $json.SetupCost }} | *Monthly:* ${{ $json.MonthlyCost }}\n*ROI:* {{ $json.HoursSavedPerMonth }} hrs/mo saved, ${{ $json.LaborSavedPerMonth }}/mo saved, payback {{ $json.PaybackMonths }} months\n*Confidence:* {{ $json.Confidence }}\n\n:calendar: Schedule follow-up for day 3.",
+        "otherOptions": {}
+      },
+      "id": "s12-slack",
+      "name": "Slack: Proposal Sent",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        2020,
+        -60
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "0LO7Ag4PE1NaZFpO",
+          "name": "Slack account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "s12-slack-proposal-001"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, status: 'proposal_sent', company: $json.Company, setupCost: $json.SetupCost, monthlyCost: $json.MonthlyCost }) }}",
+        "options": {}
+      },
+      "id": "s12-respond",
+      "name": "Respond: 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2280,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Lead Pipeline"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "s12-log-invalid",
+      "name": "Sheets: Log Invalid",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        720,
+        260
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Lead Pipeline"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "s12-log-fail",
+      "name": "Sheets: Log Parse Fail",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1240,
+        160
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "Webhook: Discovery Notes": {
+      "main": [
+        [
+          {
+            "node": "Discovery Notes (Demo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Discovery Notes (Demo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Discovery Notes (Demo)": {
+      "main": [
+        [
+          {
+            "node": "Validate Notes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Notes": {
+      "main": [
+        [
+          {
+            "node": "Notes Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notes Valid?": {
+      "main": [
+        [
+          {
+            "node": "Gemini: Generate Proposal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sheets: Log Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini: Generate Proposal": {
+      "main": [
+        [
+          {
+            "node": "Parse Proposal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Proposal": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Send Proposal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: Send Proposal": {
+      "main": [
+        [
+          {
+            "node": "Prepare Pipeline Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Pipeline Row": {
+      "main": [
+        [
+          {
+            "node": "Sheets: Log to Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sheets: Log to Pipeline": {
+      "main": [
+        [
+          {
+            "node": "Slack: Proposal Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack: Proposal Sent": {
+      "main": [
+        [
+          {
+            "node": "Respond: 200 OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
