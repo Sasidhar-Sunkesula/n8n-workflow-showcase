@@ -1,0 +1,631 @@
+{
+  "name": "10 · Customer Onboarding Automation (SaaS)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 10 · Customer Onboarding Automation (SaaS)\n**What it does:** When a new customer signs up (webhook), it enriches their data, AI-personalizes a welcome email, provisions their account in the CRM/tracker, notifies the success team on Slack, and logs to the onboarding pipeline.\n\n**Why it sells:** SaaS companies lose customers in the first 30 days due to slow, generic onboarding. This makes onboarding instant, personalized, and tracked. **Sell at:** $600-1000 setup + $200-350/mo.",
+        "height": 140,
+        "width": 940,
+        "color": 4
+      },
+      "id": "s10-title",
+      "name": "Sticky: Title & ROI",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Signup Webhook\n**Webhook** receives new signup: name, email, company, plan.\n\n**Demo:** manual trigger with sample signup.\nValidate: email format, name present, plan in allowed list.\nIdempotency: email+date key prevents double-onboarding.",
+        "height": 200,
+        "width": 300,
+        "color": 5
+      },
+      "id": "s10-input",
+      "name": "Sticky: Signup Webhook",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### AI Personalization\nGemini writes a personalized welcome email:\n- References their company + plan\n- Suggests relevant first steps\n- Warm, human tone (not generic)\n\nConfidence gate: low-confidence → generic template fallback.",
+        "height": 200,
+        "width": 340,
+        "color": 5
+      },
+      "id": "s10-ai",
+      "name": "Sticky: AI Personalization",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Provision + Notify\n- Add customer to CRM/onboarding tracker (Sheets)\n- Send personalized welcome email (Gmail)\n- Notify success team on Slack\n- Log to onboarding pipeline\n\nCustomer gets instant, personalized onboarding. Success team gets a heads-up. Nothing falls through cracks.",
+        "height": 200,
+        "width": 340,
+        "color": 5
+      },
+      "id": "s10-output",
+      "name": "Sticky: Provision + Notify",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1180,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "customer-onboarding",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "s10-webhook",
+      "name": "Webhook: New Signup",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        20
+      ],
+      "webhookId": "s10-webhook-onboarding-001"
+    },
+    {
+      "parameters": {},
+      "id": "s10-manual",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -320,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// Demo signup. PRODUCTION: replace with webhook body from your signup flow.\nconst signup = {\n  name: \"Sarah Mitchell\",\n  email: \"sarah@brightwavecoffee.com\",\n  company: \"Brightwave Coffee\",\n  plan: \"Growth\",\n  signupSource: \"website\"\n};\nconst input = $json.body && $json.body.email ? $json.body : signup;\nreturn { json: { ...input, EventKey: \"onboarding:\" + input.email + \":\" + new Date().toISOString().slice(0,10) } };\n"
+      },
+      "id": "s10-signup",
+      "name": "New Signup (Demo)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -60,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst s = $json;\nconst allowedPlans = [\"Starter\", \"Growth\", \"Enterprise\"];\nconst emailOk = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(String(s.email || ''));\nconst ok = emailOk && s.name && String(s.name).length >= 2 && (s.plan ? allowedPlans.includes(s.plan) : true);\nif (!ok) return { json: { Timestamp: new Date().toISOString(), EventKey: s.EventKey || 'unknown',\n  Workflow: 'customer-onboarding', Status: 'rejected_invalid_signup', Reason: 'bad email/name/plan' } };\nreturn { json: { ...s, input_valid: true } };\n"
+      },
+      "id": "s10-validate",
+      "name": "Validate Signup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.input_valid === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "s10-if-valid",
+      "name": "Signup Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        460,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst s = $json;\n// PRODUCTION: check Sheets \"Onboarding Pipeline\" for existing EventKey.\n// Demo: assume new (not a duplicate).\nconst isDuplicate = false; // PRODUCTION: Sheets lookup by EventKey\nreturn { json: { ...s, is_duplicate: isDuplicate } };\n"
+      },
+      "id": "s10-idemp",
+      "name": "Idempotency Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.is_duplicate === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "s10-if-dup",
+      "name": "Duplicate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        980,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "models/gemma-4-31b-it"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a customer success manager at a SaaS company. Write a warm, personalized welcome email to a new customer who just signed up.\n\nCUSTOMER: {{ $json.name }} at {{ $json.company }}\nPLAN: {{ $json.plan }}\n\nWrite a welcome email (120-180 words) that:\n- Welcomes them warmly by first name\n- References their company and plan specifically\n- Suggests 2-3 relevant first steps to get value quickly\n- Offers help and a clear next step (book a call / reply)\n- Warm, human, not generic or salesy\n\nGenerate exactly this JSON (no markdown fences):\n{\n  \"subject\": \"<email subject line>\",\n  \"body\": \"<email body>\",\n  \"confidence\": <0.0-1.0>\n}\nYour ENTIRE response must be that single JSON object."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "s10-gemini",
+      "name": "Gemini: Write Welcome Email",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1240,
+        -60
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "B8oepyrWrBGFl6Ud",
+          "name": "Google Gemini (portfolio)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst raw = $json.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('') ?? $json.text ?? '';\nconst cleaned = raw.replace(/```json/gi,'').replace(/```/g,'').trim();\nlet data = null;\nfor (const c of (cleaned.match(/\\{[\\s\\S]*\\}/g) || []).reverse()) {\n  try { const p = JSON.parse(c); if (p && p.body) { data = p; break; } } catch(e){}\n}\nconst signup = $('Idempotency Check').item.json;\nif (!data) return { json: { ...signup, parse_ok: false, error: 'AI output unparseable',\n  subject: 'Welcome aboard!', body: 'Hi ' + signup.name + ', welcome to the team! We are excited to have you. Reply to this email if you need anything.', confidence: 0.5 } };\nconst confidence = typeof data.confidence === 'number' ? data.confidence : 0.7;\nreturn { json: { ...signup, ...data, confidence, parse_ok: true } };\n"
+      },
+      "id": "s10-parse",
+      "name": "Parse Welcome Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $json.email }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "message": "={{ $json.body }}",
+        "options": {}
+      },
+      "id": "s10-gmail",
+      "name": "Gmail: Send Welcome",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1760,
+        -60
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "6cOkI9yXp7fgLHw4",
+          "name": "Gmail account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "s10-gmail-welcome-001"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst d = $json;\nreturn { json: {\n  Timestamp: new Date().toISOString(),\n  EventKey: d.EventKey,\n  Workflow: 'customer-onboarding',\n  Status: 'onboarded',\n  Name: d.name,\n  Email: d.email,\n  Company: d.company,\n  Plan: d.plan || 'Unknown',\n  SignupSource: d.signupSource || 'unknown',\n  OnboardingStage: 'welcome_sent',\n  Confidence: d.confidence,\n  ReplayPolicy: 'idempotent_skip'\n}};\n"
+      },
+      "id": "s10-crm",
+      "name": "Prepare CRM Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Onboarding Pipeline"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "s10-sheets",
+      "name": "Sheets: Add to Pipeline",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2280,
+        -60
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "C0BKVT980BE"
+        },
+        "text": ":tada: *New Customer Onboarded*\n\n*Customer:* {{ $json.Name }} ({{ $json.Company }})\n*Plan:* {{ $json.Plan }}\n*Source:* {{ $json.SignupSource }}\n*Welcome email:* sent ✅\n*Confidence:* {{ $json.Confidence }}\n\n:rocket: Add to onboarding checklist and schedule kickoff call.",
+        "otherOptions": {}
+      },
+      "id": "s10-slack",
+      "name": "Slack: Notify Success Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        2540,
+        -60
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "0LO7Ag4PE1NaZFpO",
+          "name": "Slack account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "s10-slack-notify-001"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, status: 'onboarded', customer: $json.Name, stage: 'welcome_sent' }) }}",
+        "options": {}
+      },
+      "id": "s10-respond",
+      "name": "Respond: 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2800,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Onboarding Errors"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "s10-log-invalid",
+      "name": "Sheets: Log Invalid",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        720,
+        260
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Onboarding Errors"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "s10-log-dup",
+      "name": "Sheets: Log Duplicate",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1240,
+        160
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "Webhook: New Signup": {
+      "main": [
+        [
+          {
+            "node": "New Signup (Demo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "New Signup (Demo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New Signup (Demo)": {
+      "main": [
+        [
+          {
+            "node": "Validate Signup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Signup": {
+      "main": [
+        [
+          {
+            "node": "Signup Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signup Valid?": {
+      "main": [
+        [
+          {
+            "node": "Idempotency Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sheets: Log Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Idempotency Check": {
+      "main": [
+        [
+          {
+            "node": "Duplicate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Duplicate?": {
+      "main": [
+        [
+          {
+            "node": "Sheets: Log Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gemini: Write Welcome Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini: Write Welcome Email": {
+      "main": [
+        [
+          {
+            "node": "Parse Welcome Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Welcome Email": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Send Welcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: Send Welcome": {
+      "main": [
+        [
+          {
+            "node": "Prepare CRM Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare CRM Row": {
+      "main": [
+        [
+          {
+            "node": "Sheets: Add to Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sheets: Add to Pipeline": {
+      "main": [
+        [
+          {
+            "node": "Slack: Notify Success Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack: Notify Success Team": {
+      "main": [
+        [
+          {
+            "node": "Respond: 200 OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
