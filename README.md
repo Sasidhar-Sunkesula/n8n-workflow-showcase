@@ -7,7 +7,7 @@
 
 ## What This Is
 
-Ten production-grade n8n workflows demonstrating AI-powered business automation across **Support, Sales, Knowledge, Operations, Marketing, Finance, Competitive Intelligence, and SaaS** — plus a shared error-handling infrastructure workflow. Every workflow runs with **real integrations** (Gmail, Google Sheets, Slack, Notion) and **real AI** (Google Gemini / gemma-4-31b-it), not mocks.
+Eleven production-grade n8n workflows demonstrating AI-powered business automation across **Support, Sales, Knowledge, Operations, Marketing, Finance, Competitive Intelligence, and SaaS** — plus a shared error-handling infrastructure workflow. Every workflow runs with **real integrations** (Gmail, Google Sheets, Slack, Notion) and **real AI** (Google Gemini / gemma-4-31b-it), not mocks.
 
 Each workflow is built to production standards: retry logic, idempotency guards, input validation, structured audit logging, human-in-the-loop approval gates, confidence gating, and a shared error handler with dead-letter queue + multi-channel alerting.
 
@@ -28,6 +28,7 @@ Each workflow is built to production standards: retry logic, idempotency guards,
 | 08 | [Social Media Content Repurposing](workflows/08-content-repurpose/) | Marketing | 1 article → 3 platform variants (Twitter/LinkedIn/hook) → Slack review | $400–700 + $150–250/mo |
 | 09 | [Competitor Change Monitor & Alerting](workflows/09-competitor-monitor/) | Intelligence | Daily competitor page monitoring → hash diff → AI summary → Slack alert | $400–700 + $150–250/mo |
 | 10 | [Customer Onboarding Automation](workflows/10-customer-onboarding/) | SaaS | Signup webhook → AI welcome email → CRM + Slack notify | $600–1000 + $200–350/mo |
+| 11 | [Lead Pipeline Manager](workflows/11-lead-pipeline/) | Sales | Daily follow-up cadence → stage-based messages → Slack alerts | $400–700 + $150–250/mo |
 
 ---
 
@@ -90,7 +91,10 @@ n8n-workflow-showcase/
     ├── 09-competitor-monitor/
     │   ├── workflow.json
     │   └── README.md
-    └── 10-customer-onboarding/
+    ├── 10-customer-onboarding/
+    │   ├── workflow.json
+    │   └── README.md
+    └── 11-lead-pipeline/
         ├── workflow.json
         └── README.md
 ```

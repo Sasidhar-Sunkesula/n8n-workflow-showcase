@@ -1,0 +1,315 @@
+{
+  "name": "11 · Lead Pipeline Manager (Outreach)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 11 · Lead Pipeline Manager (Meta — manages my own outreach)\n**What it does:** Daily, scans the Leads sheet for leads needing follow-up (based on stage + days since last contact), generates the right follow-up message, and alerts me on Slack with a ready-to-send follow-up list.\n\n**Why it matters:** The fortune is in the follow-up. Most leads convert on the 3rd-5th touch, not the first. This makes sure no lead falls through the cracks.",
+        "height": 130,
+        "width": 940,
+        "color": 4
+      },
+      "id": "s11-title",
+      "name": "Sticky: Title",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Follow-up Logic\nDaily at 9 AM, for each lead in the Leads sheet:\n- Compute days since last contact\n- Apply follow-up cadence by stage:\n  - New: follow up day 3\n  - Proposal sent: follow up day 3, 7, 14\n  - Hot: follow up day 1, 3\n- If due → generate follow-up message + add to today's list\n- If too many touches → move to nurture\n\nIdempotency: won't generate the same follow-up twice.",
+        "height": 220,
+        "width": 360,
+        "color": 5
+      },
+      "id": "s11-logic",
+      "name": "Sticky: Follow-up Logic",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Output\n- Build today's follow-up list\n- Slack alert with ready-to-send follow-ups\n- Log follow-up activity to pipeline\n- Update lead stage + last contact date\n\nI get a Slack message every morning: 'Here are 5 leads to follow up today, with messages ready to send.'",
+        "height": 200,
+        "width": 340,
+        "color": 5
+      },
+      "id": "s11-output",
+      "name": "Sticky: Output",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1180,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "s11-schedule",
+      "name": "Schedule: Daily 9AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -320,
+        20
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "s11-manual",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -320,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nconst today = new Date();\nconst daysAgo = (n) => new Date(today.getTime() - n*86400000).toISOString().slice(0,10);\nconst leads = [\n  { name: \"Ryan Ellis\", company: \"Red Egg Marketing\", email: \"ryan@redeggmarketing.com\", stage: \"proposal_sent\", lastContactDate: daysAgo(3), touches: 1, score: 8 },\n  { name: \"Natalie Henley\", company: \"V9 Digital\", email: \"info@v9digital.com\", stage: \"new\", lastContactDate: daysAgo(4), touches: 1, score: 7 },\n  { name: \"Neil Welsh\", company: \"Silverback Strategies\", email: \"info@silverbackstrategies.com\", stage: \"proposal_sent\", lastContactDate: daysAgo(7), touches: 2, score: 6 }\n];\nreturn leads.map(l => ({ json: { ...l, EventKey: \"followup:\" + l.email + \":\" + today.toISOString().slice(0,10) } }));\n"
+      },
+      "id": "s11-leads",
+      "name": "Load Leads (Demo)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -60,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst l = $json;\nconst today = new Date();\nconst last = new Date(l.lastContactDate);\nconst daysSince = Math.floor((today - last) / 86400000);\nconst cadence = {\n  \"new\": [3],\n  \"proposal_sent\": [3, 7, 14],\n  \"hot\": [1, 3],\n  \"nurture\": [30]\n};\nconst schedule = cadence[l.stage] || [7];\nconst touches = l.touches || 0;\nconst nextTouch = schedule[Math.min(touches, schedule.length - 1)];\nconst isDue = daysSince >= nextTouch && touches < schedule.length;\nconst maxedOut = touches >= schedule.length;\nlet message = \"\";\nif (l.stage === \"new\") {\n  message = \"Hi \" + l.name.split(' ')[0] + \", just bumping this in case it got buried. I built an n8n workflow that automates [their process]. Happy to send a 3-min demo. No pressure.\";\n} else if (l.stage === \"proposal_sent\") {\n  message = \"Hi \" + l.name.split(' ')[0] + \", following up on the proposal I sent. Any questions? Happy to jump on a quick call to walk through it.\";\n} else if (l.stage === \"hot\") {\n  message = \"Hi \" + l.name.split(' ')[0] + \", checking in — ready to lock in a spot? I'm booking projects for next month.\";\n} else {\n  message = \"Hi \" + l.name.split(' ')[0] + \", hope you're well. If [process] is still a pain point, I'd love to help.\";\n}\nreturn { json: { ...l, daysSince, touches, isDue, maxedOut, followUpMessage: message,\n  newStage: maxedOut ? \"nurture\" : l.stage } };\n"
+      },
+      "id": "s11-compute",
+      "name": "Compute Follow-up Due",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.isDue === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "s11-if-due",
+      "name": "Follow-up Due?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        460,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst l = $json;\nreturn { json: {\n  Timestamp: new Date().toISOString(),\n  EventKey: l.EventKey,\n  Workflow: 'lead-pipeline',\n  Status: 'followup_due',\n  Name: l.name,\n  Company: l.company,\n  Email: l.email,\n  Stage: l.stage,\n  NewStage: l.newStage,\n  DaysSinceContact: l.daysSince,\n  Touches: l.touches,\n  Score: l.score,\n  FollowUpMessage: l.followUpMessage,\n  ReplayPolicy: 'idempotent_skip'\n}};\n"
+      },
+      "id": "s11-build",
+      "name": "Build Follow-up Item",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1jBF0CMiwBPn9hQ3xXOHZG81SvmObiE9zNrt7E9qWXZ4"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Lead Pipeline"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "handlingExtraData": "ignoreIt"
+        }
+      },
+      "id": "s11-sheets",
+      "name": "Sheets: Log Follow-up",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        980,
+        20
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S9D1QAfTwCydvWmk",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "C0BKVT980BE"
+        },
+        "text": ":bell: *Follow-up Due Today*\n\n*Lead:* {{ $json.Name }} ({{ $json.Company }})\n*Stage:* {{ $json.Stage }} → {{ $json.NewStage }}\n*Days since contact:* {{ $json.DaysSinceContact }} | *Touches:* {{ $json.Touches }} | *Score:* {{ $json.Score }}/10\n*Email:* {{ $json.Email }}\n\n*Ready-to-send message:*\n> {{ $json.FollowUpMessage }}\n\n:email: Copy, personalize, and send.",
+        "otherOptions": {}
+      },
+      "id": "s11-slack",
+      "name": "Slack: Follow-up Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1240,
+        20
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "0LO7Ag4PE1NaZFpO",
+          "name": "Slack account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "webhookId": "s11-slack-followup-001"
+    }
+  ],
+  "connections": {
+    "Schedule: Daily 9AM": {
+      "main": [
+        [
+          {
+            "node": "Load Leads (Demo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Load Leads (Demo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Leads (Demo)": {
+      "main": [
+        [
+          {
+            "node": "Compute Follow-up Due",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Follow-up Due": {
+      "main": [
+        [
+          {
+            "node": "Follow-up Due?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Follow-up Due?": {
+      "main": [
+        [
+          {
+            "node": "Build Follow-up Item",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Build Follow-up Item": {
+      "main": [
+        [
+          {
+            "node": "Sheets: Log Follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sheets: Log Follow-up": {
+      "main": [
+        [
+          {
+            "node": "Slack: Follow-up Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
